@@ -27,6 +27,9 @@
               <n-space>
                 <n-button size="small" @click="openApiEdit(api)">编辑</n-button>
                 <n-button size="small" :loading="apiTesting === api.id" @click="testApiConnection(api.id)">测试</n-button>
+                <n-tag v-if="testResults[api.id]" :type="testResults[api.id].success ? 'success' : 'error'" size="small">
+                  {{ testResults[api.id].success ? '✓ 连接成功' : '✗ ' + testResults[api.id].error }}
+                </n-tag>
                 <n-popconfirm @positive-click="removeApi(api.id)">
                   <template #trigger>
                     <n-button size="small" type="error">删除</n-button>
@@ -169,9 +172,12 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useMessage } from 'naive-ui'
 import { listModelApis, createModelApi, updateModelApi, deleteModelApi, testModelApi } from '../api/model-apis.js'
 import { listPlans, createPlan, updatePlan, deletePlan } from '../api/plans.js'
 import { listTaskBindings, updateTaskBinding, deleteTaskBinding } from '../api/task-bindings.js'
+
+const message = useMessage()
 
 const activeTab = ref('apis')
 const apis = ref([])
@@ -222,6 +228,7 @@ const apiEditing = ref(null)
 const apiForm = ref({ name: '', provider: 'openai', model_name: '', api_key: '', api_base_url: '', enabled: true, max_tokens: null, temperature: null })
 const apiSaving = ref(false)
 const apiTesting = ref(null)
+const testResults = ref({})
 
 function openApiCreate() {
   apiEditing.value = null
@@ -248,9 +255,9 @@ async function saveApi() {
     apiModal.value = false
     const res = await listModelApis()
     apis.value = res.data
-    window.$message?.success('保存成功')
+    message.success('保存成功')
   } catch (e) {
-    window.$message?.error(e.response?.data?.detail || '保存失败')
+    message.error(e.response?.data?.detail || '保存失败')
   } finally {
     apiSaving.value = false
   }
@@ -261,21 +268,26 @@ async function removeApi(id) {
     await deleteModelApi(id)
     const res = await listModelApis()
     apis.value = res.data
-    window.$message?.success('删除成功')
+    message.success('删除成功')
   } catch (e) {
-    window.$message?.error('删除失败')
+    message.error('删除失败')
   }
 }
 
 async function testApiConnection(id) {
   apiTesting.value = id
+  delete testResults.value[id]
   try {
     const res = await testModelApi(id)
-    window.$message?.[res.data.success ? 'success' : 'error'](
-      res.data.success ? '连接成功' : `连接失败: ${res.data.error}`,
-    )
+    testResults.value[id] = { success: res.data.success, error: res.data.error }
+    if (res.data.success) {
+      message.success(`「${apis.value.find(a => a.id === id)?.name}」连接成功`)
+    } else {
+      message.error(`连接失败: ${res.data.error}`)
+    }
   } catch (e) {
-    window.$message?.error(`请求失败: ${e.message}`)
+    testResults.value[id] = { success: false, error: e.message }
+    message.error(`请求失败: ${e.message}`)
   } finally {
     apiTesting.value = null
   }
@@ -310,9 +322,9 @@ async function savePlan() {
     planModal.value = false
     const res = await listPlans()
     plans.value = res.data
-    window.$message?.success('保存成功')
+    message.success('保存成功')
   } catch (e) {
-    window.$message?.error(e.response?.data?.detail || '保存失败')
+    message.error(e.response?.data?.detail || '保存失败')
   } finally {
     planSaving.value = false
   }
@@ -323,9 +335,9 @@ async function removePlan(id) {
     await deletePlan(id)
     const res = await listPlans()
     plans.value = res.data
-    window.$message?.success('删除成功')
+    message.success('删除成功')
   } catch (e) {
-    window.$message?.error('删除失败')
+    message.error('删除失败')
   }
 }
 
@@ -343,9 +355,9 @@ async function onBind(taskKey, planId) {
     }
     const res = await listTaskBindings()
     bindings.value = res.data
-    window.$message?.success('绑定成功')
+    message.success('绑定成功')
   } catch (e) {
-    window.$message?.error(e.response?.data?.detail || '操作失败')
+    message.error(e.response?.data?.detail || '操作失败')
   } finally {
     bindingSaving.value = null
   }
