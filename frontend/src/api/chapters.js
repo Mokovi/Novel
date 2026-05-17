@@ -35,3 +35,11 @@ export function deleteVolume(id) {
 export function createVolume(data) {
   return http.post('/volumes', data)
 }
+
+export function downloadChapter(id) {
+  return http.get(`/chapters/${id}/download`, { responseType: 'blob' })
+}
+
+export function downloadAllChapters() {
+  return http.get('/chapters/download-all', { responseType: 'blob' })
+}

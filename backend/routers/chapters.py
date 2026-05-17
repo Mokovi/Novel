@@ -1,6 +1,11 @@
 """REST endpoints for Volume and Chapter CRUD."""
 
+from io import BytesIO
+from urllib.parse import quote
+import zipfile
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -68,6 +73,28 @@ def reorder_chapters(body: ReorderRequest, db: Session = Depends(get_db)):
     return None
 
 
+@router.get("/chapters/download-all")
+def download_all_chapters(db: Session = Depends(get_db)):
+    """Download all chapters grouped by volume as a ZIP file."""
+    volumes = chapter_repo.list_volumes(db)
+    volume_map = {v.id: v.title for v in volumes}
+    chapters = chapter_repo.list_chapters(db, limit=10000)
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for ch in chapters:
+            vol_title = volume_map.get(ch.volume_id, "未分类")
+            filename = f"{vol_title}/{ch.title}.txt"
+            zf.writestr(filename, ch.content or "")
+
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=chapters.zip"},
+    )
+
+
 @router.get("/chapters/{chapter_id}", response_model=ChapterResponse)
 def get_chapter(chapter_id: int, db: Session = Depends(get_db)):
     """Get chapter detail by ID."""
@@ -75,6 +102,22 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db)):
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
     return chapter
+
+
+@router.get("/chapters/{chapter_id}/download")
+def download_chapter(chapter_id: int, db: Session = Depends(get_db)):
+    """Download a single chapter as a TXT file."""
+    chapter = chapter_repo.get_chapter(db, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    filename = quote(chapter.title or f"chapter_{chapter_id}")
+    return Response(
+        content=chapter.content or "",
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{filename}.txt"
+        },
+    )
 
 
 @router.put("/chapters/{chapter_id}", response_model=ChapterResponse)
