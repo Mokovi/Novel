@@ -3,12 +3,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.config import load_config
 from backend.routers import api_plans, chapters, generate, model_apis, task_bindings, templates
+
+config = load_config()
 
 app = FastAPI(
     title="AI_Novel",
     description="Local human-AI collaborative novel writing system",
-    version="0.1.0",
+    version=config.get("version", "0.1.0"),
 )
 
 app.add_middleware(
@@ -29,4 +32,5 @@ app.include_router(templates.router)
 
 @app.get("/api/v1/health")
 async def health():
-    return {"status": "ok"}
+    cfg = load_config()
+    return {"status": "ok", "version": cfg.get("version", "0.1.0")}

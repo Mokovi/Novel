@@ -91,7 +91,16 @@ For multi-step tasks, state a brief plan:
 - **Task-level model routing.** Each task type (chapter_writing, outline_design, etc.) independently configures provider/model/params.
 - **API key storage:** Frontend config (SQLite) > .env fallback. Simple obfuscation (base64 + local salt) in DB, NOT plaintext.
 
-### 7. Git Workflow
+### 7. Version Management
+
+- Project version is stored in `data/config.json` under the `version` key.
+- **When making any functional change** (new feature, bug fix, refactor), bump the version:
+  - Patch (`0.1.X`): bug fixes, minor tweaks, UI polish
+  - Minor (`0.X.0`): new features, new tasks completed
+  - Major (`X.0.0`): phase completion, major milestones
+- After bumping version in `config.json`, also update `docs/progress.md` to reflect what changed.
+
+### 8. Git Workflow
 
 - Initialize git at project root before any coding begins.
 - Commit after every completed task (each `P{phase}-T{task}` in `docs/task_moc.md`).
