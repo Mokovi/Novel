@@ -60,3 +60,6 @@ class ChapterCharacter(Base):
     character_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
     )
+
+    chapter: Mapped["Chapter"] = relationship("Chapter", back_populates="character_associations")
+    character: Mapped["Character"] = relationship("Character")

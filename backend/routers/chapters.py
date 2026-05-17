@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.repositories import chapter_repo
 from backend.schemas.chapter import (
+    ChapterCharactersUpdate,
     ChapterCreate,
     ChapterResponse,
     ChapterUpdate,
+    CharacterBrief,
     ReorderRequest,
     VolumeCreate,
     VolumeResponse,
@@ -136,3 +138,33 @@ def delete_chapter(chapter_id: int, db: Session = Depends(get_db)):
     if not deleted:
         raise HTTPException(status_code=404, detail="Chapter not found")
     return None
+
+
+# ── Chapter-Character Associations ─────────────────────────
+
+
+@router.get(
+    "/chapters/{chapter_id}/characters",
+    response_model=list[CharacterBrief],
+)
+def get_chapter_characters(chapter_id: int, db: Session = Depends(get_db)):
+    """Get all characters associated with a chapter."""
+    characters = chapter_repo.get_chapter_characters(db, chapter_id)
+    return characters
+
+
+@router.put(
+    "/chapters/{chapter_id}/characters",
+    response_model=list[CharacterBrief],
+)
+def set_chapter_characters(
+    chapter_id: int,
+    body: ChapterCharactersUpdate,
+    db: Session = Depends(get_db),
+):
+    """Set all character associations for a chapter (replaces existing)."""
+    try:
+        characters = chapter_repo.set_chapter_characters(db, chapter_id, body.character_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return characters

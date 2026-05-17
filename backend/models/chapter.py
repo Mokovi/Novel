@@ -60,6 +60,9 @@ class Chapter(Base):
     versions: Mapped[list["ChapterVersion"]] = relationship(
         "ChapterVersion", back_populates="chapter", cascade="all, delete-orphan"
     )
+    character_associations: Mapped[list["ChapterCharacter"]] = relationship(
+        "ChapterCharacter", back_populates="chapter", cascade="all, delete-orphan"
+    )
 
 
 class ChapterVersion(Base):

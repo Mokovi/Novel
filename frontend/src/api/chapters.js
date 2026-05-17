@@ -43,3 +43,11 @@ export function downloadChapter(id) {
 export function downloadAllChapters() {
   return http.get('/chapters/download-all', { responseType: 'blob' })
 }
+
+export function getChapterCharacters(id) {
+  return http.get(`/chapters/${id}/characters`)
+}
+
+export function setChapterCharacters(id, characterIds) {
+  return http.put(`/chapters/${id}/characters`, { character_ids: characterIds })
+}

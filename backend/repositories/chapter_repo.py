@@ -6,6 +6,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from backend.models.chapter import Chapter, ChapterVersion, Volume
+from backend.models.story_line import ChapterCharacter
 from backend.schemas.chapter import (
     ChapterCreate,
     ChapterUpdate,
@@ -123,3 +124,32 @@ def reorder_chapters(db: Session, items: list[ReorderItem]) -> None:
             .values(sort_order=item.sort_order)
         )
     db.commit()
+
+
+def get_chapter_characters(db: Session, chapter_id: int) -> list:
+    """Get all characters associated with a chapter."""
+    chapter = db.get(Chapter, chapter_id)
+    if not chapter:
+        return []
+    return [cc.character for cc in chapter.character_associations]
+
+
+def set_chapter_characters(db: Session, chapter_id: int, character_ids: list[int]) -> list:
+    """Replace all character associations for a chapter. Returns the new list of characters."""
+    chapter = db.get(Chapter, chapter_id)
+    if not chapter:
+        raise ValueError(f"Chapter {chapter_id} not found")
+
+    # Remove existing associations
+    db.query(ChapterCharacter).filter(
+        ChapterCharacter.chapter_id == chapter_id
+    ).delete()
+
+    # Add new associations
+    for cid in character_ids:
+        assoc = ChapterCharacter(chapter_id=chapter_id, character_id=cid)
+        db.add(assoc)
+
+    db.commit()
+    db.refresh(chapter)
+    return [cc.character for cc in chapter.character_associations]

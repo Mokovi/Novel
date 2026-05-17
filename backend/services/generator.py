@@ -34,6 +34,55 @@ def _read_json_file(path: Path, default: str) -> str:
     return default
 
 
+def _filter_worldview(worldview: dict, level: str) -> str:
+    """Filter worldview content based on chapter's worldview_level."""
+    if level == "high":
+        return json.dumps(worldview, ensure_ascii=False, indent=2)
+
+    if level == "low":
+        # Only the background section
+        filtered = {"背景": worldview.get("背景", {})}
+        return json.dumps(filtered, ensure_ascii=False, indent=2)
+
+    # medium: include top-level sections that have meaningful content
+    filtered = {}
+    for k, v in worldview.items():
+        if isinstance(v, dict):
+            has_content = any(
+                isinstance(vv, str) and vv.strip()
+                or isinstance(vv, list) and len(vv) > 0
+                for vv in v.values()
+            )
+            if has_content:
+                filtered[k] = v
+        elif isinstance(v, list) and len(v) > 0:
+            filtered[k] = v
+        elif isinstance(v, str) and v.strip():
+            filtered[k] = v
+    return json.dumps(filtered, ensure_ascii=False, indent=2)
+
+
+def _format_character_profiles(characters: list) -> str:
+    """Format character data into a prompt-ready profile block."""
+    parts = []
+    for c in characters:
+        lines = [f"## {c.name}"]
+        if c.role_type:
+            lines[0] += f" ({c.role_type})"
+        if c.description:
+            lines.append(f"描述：{c.description}")
+        if c.appearance:
+            lines.append(f"外貌：{c.appearance}")
+        if c.personality:
+            lines.append(f"性格：{c.personality}")
+        if c.background:
+            lines.append(f"背景：{c.background}")
+        if c.goals:
+            lines.append(f"目标：{c.goals}")
+        parts.append("\n".join(lines))
+    return "\n\n".join(parts)
+
+
 # ── Streaming helpers ──────────────────────────────────────
 
 
@@ -160,18 +209,32 @@ async def generate_chapter_stream(
         return
 
     # 3. Build variables from JSON files + chapter data
-    worldview_text = _read_json_file(DATA_DIR / "worldview.json", "")
+    worldview_raw = _read_json_file(DATA_DIR / "worldview.json", "{}")
     writing_style_text = _read_json_file(DATA_DIR / "writing_style.json", "")
+
+    # Apply worldview level filter
+    try:
+        worldview_dict = json.loads(worldview_raw) if worldview_raw.strip() else {}
+    except json.JSONDecodeError:
+        worldview_dict = {}
+    worldview_text = _filter_worldview(worldview_dict, chapter.worldview_level or "medium")
+
+    # Load associated character profiles
+    characters = chapter_repo.get_chapter_characters(db, chapter_id)
+    character_profiles = _format_character_profiles(characters) if characters else ""
 
     variables = {
         "chapter_title": chapter.title or "",
         "chapter_summary": chapter.summary or "",
         "worldview": worldview_text,
         "writing_style": writing_style_text,
+        "character_profiles": character_profiles,
     }
 
-    logger.info("Generated vars: worldview={} chars, style={} chars",
-                len(worldview_text), len(writing_style_text))
+    logger.info(
+        "Generated vars: worldview={} chars (level={}), style={} chars, characters={}",
+        len(worldview_text), chapter.worldview_level, len(writing_style_text), len(characters),
+    )
 
     # 4. Build prompt
     try:

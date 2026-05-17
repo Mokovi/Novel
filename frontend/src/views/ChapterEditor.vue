@@ -76,6 +76,40 @@
             <n-form-item label="摘要">
               <n-input v-model:value="editSummary" type="textarea" rows="4" />
             </n-form-item>
+            <n-form-item label="世界观注入">
+              <n-radio-group
+                v-model:value="editingWorldviewLevel"
+                size="small"
+                @update:value="handleWorldviewLevelChange"
+              >
+                <n-radio-button value="high">详细</n-radio-button>
+                <n-radio-button value="medium">标准</n-radio-button>
+                <n-radio-button value="low">精简</n-radio-button>
+              </n-radio-group>
+            </n-form-item>
+            <n-form-item label="关联人物">
+              <n-select
+                multiple
+                filterable
+                placeholder="搜索人物..."
+                :options="characterOptions"
+                v-model:value="editingCharacterIds"
+                @update:value="handleCharacterChange"
+                :loading="charactersLoading"
+              />
+            </n-form-item>
+            <div v-if="chapterCharacters.length" class="character-tags">
+              <n-tag
+                v-for="ch in chapterCharacters"
+                :key="ch.id"
+                closable
+                @close="handleCharacterChange(editingCharacterIds.filter(id => id !== ch.id))"
+                :type="characterTagType(ch.role_type)"
+                size="small"
+              >
+                {{ ch.name }}
+              </n-tag>
+            </div>
             <n-divider />
             <n-form-item label="状态">
               <n-space>
@@ -111,7 +145,8 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { useChaptersStore } from '../stores/chapters.js'
-import { updateChapter, deleteChapter, downloadChapter } from '../api/chapters.js'
+import { updateChapter, deleteChapter, downloadChapter, getChapterCharacters, setChapterCharacters } from '../api/chapters.js'
+import { listCharacters } from '../api/characters.js'
 import { generateChapter } from '../api/generate.js'
 import StreamOutput from '../components/common/StreamOutput.vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
@@ -144,6 +179,25 @@ let abortController = null
 const editTitle = ref('')
 const editSummary = ref('')
 const editContent = ref('')
+
+// Character association
+const allCharacters = ref([])
+const chapterCharacters = ref([])
+const editingCharacterIds = ref([])
+const charactersLoading = ref(false)
+
+// Worldview level
+const editingWorldviewLevel = ref('medium')
+
+const characterOptions = computed(() =>
+  allCharacters.value.map((c) => ({
+    label: `${c.name}${c.role_type ? ` (${c.role_type})` : ''}`,
+    value: c.id,
+  }))
+)
+
+const characterTagType = (role) =>
+  ({ protagonist: 'success', antagonist: 'error', supporting: 'info', minor: 'default' }[role] || 'default')
 
 // Chapter menu (grouped by volume)
 const chapterMenuOptions = computed(() => {
@@ -198,6 +252,7 @@ function syncEditBuffers() {
     editTitle.value = store.currentChapter.title || ''
     editSummary.value = store.currentChapter.summary || ''
     editContent.value = store.currentChapter.content || ''
+    editingWorldviewLevel.value = store.currentChapter.worldview_level || 'medium'
     const content = store.currentChapter.content || ''
     if (content) {
       const html = content
@@ -208,6 +263,41 @@ function syncEditBuffers() {
     } else {
       editor.value?.commands.setContent('')
     }
+    loadChapterCharacters()
+  }
+}
+
+async function loadChapterCharacters() {
+  if (!store.currentChapter) return
+  try {
+    const res = await getChapterCharacters(store.currentChapter.id)
+    chapterCharacters.value = res.data
+    editingCharacterIds.value = res.data.map((c) => c.id)
+  } catch (e) {
+    console.error('Failed to load chapter characters:', e)
+  }
+}
+
+async function handleCharacterChange(ids) {
+  if (!store.currentChapter) return
+  editingCharacterIds.value = ids
+  try {
+    const res = await setChapterCharacters(store.currentChapter.id, ids)
+    chapterCharacters.value = res.data
+  } catch (e) {
+    message.error(`保存人物关联失败: ${e.response?.data?.detail || e.message}`)
+  }
+}
+
+async function handleWorldviewLevelChange(val) {
+  if (!store.currentChapter) return
+  editingWorldviewLevel.value = val
+  try {
+    await updateChapter(store.currentChapter.id, { worldview_level: val })
+    store.currentChapter.worldview_level = val
+    message.success('世界观级别已更新')
+  } catch (e) {
+    message.error(`更新失败: ${e.response?.data?.detail || e.message}`)
   }
 }
 
@@ -252,6 +342,7 @@ async function handleSave() {
       title: editTitle.value,
       summary: editSummary.value,
       content: editContent.value,
+      worldview_level: editingWorldviewLevel.value,
     })
     message.success('已保存')
     await store.selectChapter(store.currentChapter.id)
@@ -286,6 +377,15 @@ async function handleDelete() {
 onMounted(async () => {
   await store.fetchVolumes()
   await store.fetchChapters()
+  try {
+    charactersLoading.value = true
+    const res = await listCharacters({ limit: 500 })
+    allCharacters.value = res.data
+  } catch (e) {
+    console.error('Failed to load characters:', e)
+  } finally {
+    charactersLoading.value = false
+  }
 })
 
 onBeforeUnmount(() => {
@@ -427,6 +527,13 @@ onBeforeUnmount(() => {
 
 .meta-label {
   font-size: 12px;
+}
+
+.character-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: -8px;
 }
 
 .empty-editor {

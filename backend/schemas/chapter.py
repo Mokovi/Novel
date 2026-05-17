@@ -34,6 +34,7 @@ class ChapterUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=255)
     summary: Optional[str] = None
     content: Optional[str] = None
+    worldview_level: Optional[str] = Field(None, pattern=r"^(high|medium|low)$")
 
 
 class ChapterResponse(BaseModel):
@@ -59,3 +60,15 @@ class ReorderItem(BaseModel):
 
 class ReorderRequest(BaseModel):
     items: list[ReorderItem]
+
+
+class CharacterBrief(BaseModel):
+    id: int
+    name: str
+    role_type: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ChapterCharactersUpdate(BaseModel):
+    character_ids: list[int]
