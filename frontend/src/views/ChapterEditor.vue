@@ -6,18 +6,17 @@
       <n-space>
         <n-button
           v-if="store.currentChapter"
-          :type="generating ? 'warning' : 'primary'"
-          :loading="generating"
-          @click="handleGenerate"
-        >
-          {{ generating ? '生成中...' : store.currentChapter.content ? '重新生成' : '生成' }}
-        </n-button>
-        <n-button
-          v-if="store.currentChapter"
           :disabled="generating"
           @click="handleSave"
         >
           保存
+        </n-button>
+        <n-button
+          v-if="store.currentChapter"
+          :disabled="generating"
+          @click="handleDownload"
+        >
+          下载
         </n-button>
         <n-popconfirm
           v-if="store.currentChapter"
@@ -78,9 +77,19 @@
             </n-form-item>
             <n-divider />
             <n-form-item label="状态">
-              <n-tag :type="statusType(store.currentChapter.status)">
-                {{ statusLabel(store.currentChapter.status) }}
-              </n-tag>
+              <n-space>
+                <n-tag :type="statusType(store.currentChapter.status)">
+                  {{ statusLabel(store.currentChapter.status) }}
+                </n-tag>
+                <n-button
+                  size="small"
+                  :type="generating ? 'warning' : 'primary'"
+                  :loading="generating"
+                  @click="handleGenerate"
+                >
+                  {{ generating ? '生成中...' : store.currentChapter.content ? '重新生成' : '生成' }}
+                </n-button>
+              </n-space>
             </n-form-item>
             <n-form-item label="字数">
               <n-text>{{ editContent.length }} 字</n-text>
@@ -105,7 +114,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { useChaptersStore } from '../stores/chapters.js'
-import { updateChapter, deleteChapter } from '../api/chapters.js'
+import { updateChapter, deleteChapter, downloadChapter } from '../api/chapters.js'
 import { generateChapter } from '../api/generate.js'
 import StreamOutput from '../components/common/StreamOutput.vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
@@ -180,6 +189,10 @@ watch(
     if (id) {
       await store.selectChapter(parseInt(id, 10))
       syncEditBuffers()
+      if (route.query.generate === '1') {
+        router.replace({ path: route.path, params: route.params })
+        handleGenerate()
+      }
     }
   },
   { immediate: true },
@@ -190,13 +203,26 @@ function syncEditBuffers() {
     editTitle.value = store.currentChapter.title || ''
     editSummary.value = store.currentChapter.summary || ''
     editContent.value = store.currentChapter.content || ''
-    editor.value?.commands.setContent(store.currentChapter.content || '')
+    const content = store.currentChapter.content || ''
+    if (content) {
+      const html = content
+        .split('\n\n')
+        .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+        .join('')
+      editor.value?.commands.setContent(html)
+    } else {
+      editor.value?.commands.setContent('')
+    }
   }
 }
 
 // Generate
 async function handleGenerate() {
   if (!store.currentChapter) return
+  if (store.currentChapter.content) {
+    const ok = window.confirm('章节已有内容，重新生成将覆盖现有内容。确定继续？')
+    if (!ok) return
+  }
 
   generating.value = true
   streamContent.value = ''
@@ -242,6 +268,17 @@ async function handleSave() {
   } catch (e) {
     message.error(`保存失败: ${e.response?.data?.detail || e.message}`)
   }
+}
+
+async function handleDownload() {
+  if (!store.currentChapter) return
+  const res = await downloadChapter(store.currentChapter.id)
+  const url = URL.createObjectURL(new Blob([res.data]))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${store.currentChapter.title || 'chapter'}.txt`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 // Tiptap toolbar actions

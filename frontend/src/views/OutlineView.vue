@@ -5,6 +5,7 @@
     <n-space>
       <n-button type="primary" @click="showCreateVolume = true">创建卷</n-button>
       <n-button @click="showCreateChapter = true">创建章节</n-button>
+      <n-button @click="handleBatchDownload">批量下载</n-button>
     </n-space>
 
     <!-- Volume list -->
@@ -17,7 +18,7 @@
       >
         <template #header-extra>
           <n-space :size="8" align="center">
-            <n-tag>{{ vol.chapters?.length || 0 }} 章</n-tag>
+            <n-tag>{{ chaptersByVolume(vol.id).length }} 章</n-tag>
             <n-popconfirm @positive-click="handleDeleteVolume(vol.id)">
               <template #trigger>
                 <n-button size="tiny" type="error" text @click.stop>删除卷</n-button>
@@ -41,6 +42,8 @@
                     {{ statusLabel(ch.status) }}
                   </n-tag>
                   <n-text depth="3">{{ ch.word_count }} 字</n-text>
+                  <n-button size="tiny" @click.stop="handleGenerateChapter(ch)">生成</n-button>
+                  <n-button size="tiny" @click.stop="handleDownloadChapter(ch)">下载</n-button>
                   <n-popconfirm @positive-click="handleDeleteChapter(ch.id, ch.volume_id)">
                     <template #trigger>
                       <n-button size="tiny" type="error" text @click.stop>删除</n-button>
@@ -98,8 +101,11 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useChaptersStore } from '../stores/chapters.js'
-import { createVolume, createChapter, deleteChapter, deleteVolume } from '../api/chapters.js'
+import { createVolume, createChapter, deleteChapter, deleteVolume, downloadChapter, downloadAllChapters } from '../api/chapters.js'
+
+const router = useRouter()
 
 const store = useChaptersStore()
 
@@ -145,6 +151,30 @@ async function handleDeleteVolume(id) {
 async function handleDeleteChapter(id, volumeId) {
   await deleteChapter(id)
   await store.fetchChapters(volumeId)
+}
+
+function handleGenerateChapter(ch) {
+  router.push(`/editor/${ch.id}?generate=1`)
+}
+
+async function handleDownloadChapter(ch) {
+  const res = await downloadChapter(ch.id)
+  const url = URL.createObjectURL(new Blob([res.data]))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${ch.title || 'chapter'}.txt`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function handleBatchDownload() {
+  const res = await downloadAllChapters()
+  const url = URL.createObjectURL(new Blob([res.data]))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'chapters.zip'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 onMounted(async () => {
