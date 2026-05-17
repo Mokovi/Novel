@@ -1,11 +1,10 @@
-"""Model routing — config retrieval and API connectivity test."""
-
-from typing import Optional
+"""Model routing — Plan-based resolution with Round-Robin."""
 
 import httpx
 from loguru import logger
 
-from backend.models.model_route import ModelRoute
+from backend.models.api_plan import ApiPlan, PlanApi, TaskPlanBinding
+from backend.models.model_api import ModelApi
 from backend.utils.crypto import decrypt_api_key
 
 # Predefined task keys
@@ -25,43 +24,72 @@ _DEFAULT_API_BASES = {
 }
 
 
-def get_route_config(db_session, task_key: str) -> Optional[dict]:
-    """Return decrypted full config for a task key, or None if not found."""
-    route = (
-        db_session.query(ModelRoute)
-        .filter(ModelRoute.task_key == task_key)
+def resolve_api_for_task(db, task_key: str) -> dict | None:
+    """Resolve a ModelApi config for *task_key* via Plan → Round-Robin.
+
+    Returns a dict with decrypted api_key, or None if no API is available.
+    """
+    binding = (
+        db.query(TaskPlanBinding)
+        .filter(TaskPlanBinding.task_key == task_key)
         .first()
     )
-    if not route:
+    if not binding or binding.plan_id is None:
         return None
+
+    plan = db.query(ApiPlan).filter(ApiPlan.id == binding.plan_id).first()
+    if not plan:
+        return None
+
+    # Get enabled APIs in sort_order
+    rows = (
+        db.query(PlanApi, ModelApi)
+        .join(ModelApi, PlanApi.api_id == ModelApi.id)
+        .filter(PlanApi.plan_id == plan.id, ModelApi.enabled == True)
+        .order_by(PlanApi.sort_order)
+        .all()
+    )
+    if not rows:
+        return None
+
+    apis = [ma for _pa, ma in rows]
+    idx = plan.round_robin_index % len(apis)
+    selected = apis[idx]
+
+    # Advance round-robin index for next call
+    plan.round_robin_index = (idx + 1) % len(apis)
+    db.commit()
+
     config = {
-        "task_key": route.task_key,
-        "provider": route.provider,
-        "model_name": route.model_name,
-        "api_key": decrypt_api_key(route.api_key_encrypted) if route.api_key_encrypted else None,
-        "api_base_url": route.api_base_url,
-        "enabled": route.enabled,
-        "max_tokens": route.max_tokens,
-        "temperature": route.temperature,
+        "task_key": task_key,
+        "provider": selected.provider,
+        "model_name": selected.model_name,
+        "api_key": decrypt_api_key(selected.api_key_encrypted) if selected.api_key_encrypted else None,
+        "api_base_url": selected.api_base_url,
+        "enabled": selected.enabled,
+        "max_tokens": selected.max_tokens,
+        "temperature": selected.temperature,
     }
+    logger.info(
+        "Resolved API for '{}': {} (round-robin idx={})",
+        task_key, selected.model_name, idx,
+    )
     return config
 
 
-async def test_connection(route: ModelRoute) -> dict:
-    """Send a minimal test request to the configured LLM endpoint."""
-    if not route.api_key_encrypted or not route.provider:
+async def test_connection_for_api(api: ModelApi) -> dict:
+    """Send a minimal test request for a single ModelApi instance."""
+    if not api.api_key_encrypted or not api.provider:
         return {"success": False, "error": "Provider or API key not configured"}
 
-    api_key = decrypt_api_key(route.api_key_encrypted)
-    base_url = route.api_base_url or _DEFAULT_API_BASES.get(route.provider, "")
+    api_key = decrypt_api_key(api.api_key_encrypted)
+    base_url = api.api_base_url or _DEFAULT_API_BASES.get(api.provider, "")
     if not base_url:
         return {"success": False, "error": "No API base URL configured"}
 
-    # Normalize base_url — strip trailing slash
     base_url = base_url.rstrip("/")
 
-    # Build endpoint URL based on provider
-    if route.provider == "anthropic":
+    if api.provider == "anthropic":
         url = f"{base_url}/v1/messages"
         headers = {
             "x-api-key": api_key,
@@ -69,19 +97,18 @@ async def test_connection(route: ModelRoute) -> dict:
             "Content-Type": "application/json",
         }
         body = {
-            "model": route.model_name or "claude-3-haiku-20240307",
+            "model": api.model_name or "claude-3-haiku-20240307",
             "max_tokens": 10,
             "messages": [{"role": "user", "content": "hello"}],
         }
     else:
-        # OpenAI-compatible (openai, deepseek, openrouter, etc.)
         url = f"{base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         body = {
-            "model": route.model_name or "gpt-4o-mini",
+            "model": api.model_name or "gpt-4o-mini",
             "messages": [{"role": "user", "content": "hello"}],
             "max_tokens": 5,
         }

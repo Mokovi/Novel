@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from backend.config import DATA_DIR
 from backend.repositories import chapter_repo
 from backend.services import prompt_builder
-from backend.services.model_router import get_route_config
+from backend.services.model_router import resolve_api_for_task
 
 _DEFAULT_API_BASES = {
     "openai": "https://api.openai.com/v1",
@@ -185,15 +185,12 @@ async def generate_chapter_stream(
                 chapter_id, len(prompt), token_estimate)
 
     # 5. Get model config
-    route_config = get_route_config(db, "chapter_writing")
+    route_config = resolve_api_for_task(db, "chapter_writing")
     if not route_config:
-        yield _sse_event("error", {"message": "No model route found for chapter_writing"})
-        return
-    if not route_config.get("enabled"):
-        yield _sse_event("error", {"message": "chapter_writing route is not enabled"})
+        yield _sse_event("error", {"message": "No API resolved for chapter_writing. Bind a plan to this task."})
         return
     if not route_config.get("api_key"):
-        yield _sse_event("error", {"message": "API key not configured for chapter_writing"})
+        yield _sse_event("error", {"message": "API key not configured for the resolved API"})
         return
 
     # 6. Stream from LLM
