@@ -106,6 +106,15 @@ def save_generated_content(
     return chapter
 
 
+def delete_volume(db: Session, volume_id: int) -> bool:
+    volume = db.get(Volume, volume_id)
+    if not volume:
+        return False
+    db.delete(volume)
+    db.commit()
+    return True
+
+
 def reorder_chapters(db: Session, items: list[ReorderItem]) -> None:
     for item in items:
         db.execute(

@@ -16,7 +16,15 @@
         :name="String(vol.id)"
       >
         <template #header-extra>
-          <n-tag>{{ vol.chapters?.length || 0 }} 章</n-tag>
+          <n-space :size="8" align="center">
+            <n-tag>{{ vol.chapters?.length || 0 }} 章</n-tag>
+            <n-popconfirm @positive-click="handleDeleteVolume(vol.id)">
+              <template #trigger>
+                <n-button size="tiny" type="error" text>删除卷</n-button>
+              </template>
+              确定删除此卷及其下所有章节？
+            </n-popconfirm>
+          </n-space>
         </template>
 
         <n-list v-if="chaptersByVolume(vol.id).length">
@@ -33,6 +41,12 @@
                     {{ statusLabel(ch.status) }}
                   </n-tag>
                   <n-text depth="3">{{ ch.word_count }} 字</n-text>
+                  <n-popconfirm @positive-click="handleDeleteChapter(ch.id, ch.volume_id)">
+                    <template #trigger>
+                      <n-button size="tiny" type="error" text>删除</n-button>
+                    </template>
+                    确定删除此章节？
+                  </n-popconfirm>
                 </n-space>
               </template>
             </n-thing>
@@ -85,7 +99,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useChaptersStore } from '../stores/chapters.js'
-import { createVolume, createChapter } from '../api/chapters.js'
+import { createVolume, createChapter, deleteChapter, deleteVolume } from '../api/chapters.js'
 
 const store = useChaptersStore()
 
@@ -120,6 +134,17 @@ async function handleCreateChapter() {
   newChapter.value = { volume_id: null, title: '', summary: '' }
   showCreateChapter.value = false
   await store.fetchChapters()
+}
+
+async function handleDeleteVolume(id) {
+  await deleteVolume(id)
+  await store.fetchVolumes()
+  await store.fetchChapters()
+}
+
+async function handleDeleteChapter(id, volumeId) {
+  await deleteChapter(id)
+  await store.fetchChapters(volumeId)
 }
 
 onMounted(async () => {

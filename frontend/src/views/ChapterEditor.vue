@@ -19,6 +19,15 @@
         >
           保存
         </n-button>
+        <n-popconfirm
+          v-if="store.currentChapter"
+          @positive-click="handleDelete"
+        >
+          <template #trigger>
+            <n-button type="error" :disabled="generating">删除章节</n-button>
+          </template>
+          确定删除此章节？删除后不可恢复。
+        </n-popconfirm>
       </n-space>
     </n-space>
 
@@ -96,7 +105,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { useChaptersStore } from '../stores/chapters.js'
-import { updateChapter } from '../api/chapters.js'
+import { updateChapter, deleteChapter } from '../api/chapters.js'
 import { generateChapter } from '../api/generate.js'
 import StreamOutput from '../components/common/StreamOutput.vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
@@ -244,6 +253,17 @@ function toggleItalic() {
 }
 function toggleHeading() {
   editor.value?.chain().focus().toggleHeading({ level: 3 }).run()
+}
+
+async function handleDelete() {
+  if (!store.currentChapter) return
+  try {
+    await deleteChapter(store.currentChapter.id)
+    message.success('章节已删除')
+    router.push('/outline')
+  } catch (e) {
+    message.error(`删除失败: ${e.response?.data?.detail || e.message}`)
+  }
 }
 
 // Load data on mount

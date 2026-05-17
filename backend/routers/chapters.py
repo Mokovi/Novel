@@ -32,6 +32,15 @@ def create_volume(body: VolumeCreate, db: Session = Depends(get_db)):
     return chapter_repo.create_volume(db, body)
 
 
+@router.delete("/volumes/{volume_id}", status_code=204)
+def delete_volume(volume_id: int, db: Session = Depends(get_db)):
+    """Delete a volume and cascade-delete its chapters."""
+    deleted = chapter_repo.delete_volume(db, volume_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Volume not found")
+    return None
+
+
 # ── Chapters ───────────────────────────────────────────────
 
 

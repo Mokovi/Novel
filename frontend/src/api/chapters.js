@@ -28,6 +28,10 @@ export function deleteChapter(id) {
   return http.delete(`/chapters/${id}`)
 }
 
+export function deleteVolume(id) {
+  return http.delete(`/volumes/${id}`)
+}
+
 export function createVolume(data) {
   return http.post('/volumes', data)
 }
