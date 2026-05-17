@@ -1,7 +1,7 @@
 /**
  * SSE generation client — uses fetch() with ReadableStream for POST + streaming.
  */
-const BASE = 'http://localhost:8000/api/v1'
+const BASE = '/api/v1'
 
 /**
  * Start streaming generation for a chapter.
