@@ -20,7 +20,7 @@
             <n-tag>{{ vol.chapters?.length || 0 }} 章</n-tag>
             <n-popconfirm @positive-click="handleDeleteVolume(vol.id)">
               <template #trigger>
-                <n-button size="tiny" type="error" text>删除卷</n-button>
+                <n-button size="tiny" type="error" text @click.stop>删除卷</n-button>
               </template>
               确定删除此卷及其下所有章节？
             </n-popconfirm>
@@ -43,7 +43,7 @@
                   <n-text depth="3">{{ ch.word_count }} 字</n-text>
                   <n-popconfirm @positive-click="handleDeleteChapter(ch.id, ch.volume_id)">
                     <template #trigger>
-                      <n-button size="tiny" type="error" text>删除</n-button>
+                      <n-button size="tiny" type="error" text @click.stop>删除</n-button>
                     </template>
                     确定删除此章节？
                   </n-popconfirm>
