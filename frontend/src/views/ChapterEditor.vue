@@ -50,13 +50,6 @@
             <StreamOutput :content="streamContent" :streaming="true" />
           </div>
           <div v-else style="height: 100%; display: flex; flex-direction: column;">
-            <div class="editor-toolbar">
-              <n-space>
-                <n-button size="tiny" @click="toggleBold">粗体</n-button>
-                <n-button size="tiny" @click="toggleItalic">斜体</n-button>
-                <n-button size="tiny" @click="toggleHeading">标题</n-button>
-              </n-space>
-            </div>
             <div class="tiptap-wrapper">
               <editor-content :editor="editor" class="tiptap-content" />
             </div>
@@ -95,13 +88,7 @@
               <n-text>{{ editContent.length }} 字</n-text>
             </n-form-item>
             <n-divider />
-            <n-text depth="3" class="meta-label">生成参数（可选覆盖）</n-text>
-            <n-form-item label="Temperature">
-              <n-input-number v-model:value="overrideTemp" :min="0" :max="2" :step="0.1" placeholder="默认" />
-            </n-form-item>
-            <n-form-item label="Max Tokens">
-              <n-input-number v-model:value="overrideMaxTokens" :min="1" :step="256" placeholder="默认" />
-            </n-form-item>
+            <n-text depth="3" class="meta-label">AI 生成</n-text>
           </n-space>
         </n-scrollbar>
       </n-layout-sider>
@@ -147,8 +134,6 @@ let abortController = null
 const editTitle = ref('')
 const editSummary = ref('')
 const editContent = ref('')
-const overrideTemp = ref(null)
-const overrideMaxTokens = ref(null)
 
 // Chapter menu (grouped by volume)
 const chapterMenuOptions = computed(() => {
@@ -227,10 +212,6 @@ async function handleGenerate() {
   generating.value = true
   streamContent.value = ''
 
-  const overrides = {}
-  if (overrideTemp.value !== null) overrides.temperature = overrideTemp.value
-  if (overrideMaxTokens.value !== null) overrides.max_tokens = overrideMaxTokens.value
-
   abortController = generateChapter(
     store.currentChapter.id,
     {
@@ -250,7 +231,6 @@ async function handleGenerate() {
         message.error(`生成失败: ${msg}`)
       },
     },
-    overrides,
   )
 }
 
@@ -281,17 +261,6 @@ async function handleDownload() {
   URL.revokeObjectURL(url)
 }
 
-// Tiptap toolbar actions
-function toggleBold() {
-  editor.value?.chain().focus().toggleBold().run()
-}
-function toggleItalic() {
-  editor.value?.chain().focus().toggleItalic().run()
-}
-function toggleHeading() {
-  editor.value?.chain().focus().toggleHeading({ level: 3 }).run()
-}
-
 async function handleDelete() {
   if (!store.currentChapter) return
   try {
@@ -315,11 +284,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.editor-toolbar {
-  border-bottom: 1px solid #e0e0e0;
-  padding: 8px;
-  flex-shrink: 0;
-}
 .tiptap-wrapper {
   flex: 1;
   overflow-y: auto;
