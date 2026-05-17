@@ -57,6 +57,7 @@ import DashboardIcon from './assets/icons/DashboardIcon.vue'
 import OutlineIcon from './assets/icons/OutlineIcon.vue'
 import EditorIcon from './assets/icons/EditorIcon.vue'
 import WorldviewIcon from './assets/icons/WorldviewIcon.vue'
+import CharacterIcon from './assets/icons/CharacterIcon.vue'
 import SettingsIcon from './assets/icons/SettingsIcon.vue'
 
 const router = useRouter()
@@ -88,6 +89,11 @@ const menuOptions = [
     label: '世界观',
     key: 'worldview',
     icon: () => h(WorldviewIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
+  },
+  {
+    label: '人物',
+    key: 'characters',
+    icon: () => h(CharacterIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
   },
   {
     label: 'API 配置',

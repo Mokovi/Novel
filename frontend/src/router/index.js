@@ -22,6 +22,16 @@ const routes = [
     component: () => import('../views/WorldviewEditor.vue'),
   },
   {
+    path: '/characters',
+    name: 'characters',
+    component: () => import('../views/CharacterList.vue'),
+  },
+  {
+    path: '/characters/:id',
+    name: 'character-detail',
+    component: () => import('../views/CharacterDetail.vue'),
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('../views/ModelRouteSettings.vue'),
