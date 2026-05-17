@@ -1,7 +1,7 @@
 # AI_Novel 项目文档
 
-**版本：** v1.0  
-**日期：** 2026-05-17  
+**版本：** 见 `data/config.json`（当前 0.2.0）
+**日期：** 2026-05-17
 **性质：** 本地化人机协作长篇小说创作系统
 
 ---
@@ -403,35 +403,21 @@ version: 1
 
 ### 4.7 大模型路由配置
 
-#### 4.7.1 路由配置结构
+系统采用三层路由架构：**API 配置 → 计划 → 任务绑定**，实现模型配置的灵活组合与复用。
 
-```json
-{
-  "routes": {
-    "outline_design": {
-      "provider": "anthropic",
-      "model": "claude-opus-4-5",
-      "api_key": "...",
-      "base_url": "https://api.anthropic.com",
-      "max_tokens": 4096,
-      "temperature": 0.7,
-      "enabled": true
-    },
-    "chapter_writing": {
-      "provider": "openai",
-      "model": "gpt-4o",
-      "api_key": "...",
-      "base_url": "https://api.openai.com",
-      "max_tokens": 4096,
-      "temperature": 0.85,
-      "enabled": true
-    },
-    "character_design": { ... },
-    "worldbuilding": { ... },
-    "revision": { ... }
-  }
-}
+#### 4.7.1 架构概览
+
 ```
+Task (任务类型)  ──绑定──▶  Plan (API 计划)  ──包含──▶  ModelApi (API 配置)
+                                                          ├── ModelApi (API 配置)
+                                                          └── ...
+```
+
+- **ModelApi**：单个 LLM API 的配置（provider、model、api_key、base_url、参数）
+- **ApiPlan**：一组 API 配置的集合，支持 Round-Robin 轮询负载
+- **TaskPlanBinding**：将任务类型绑定到某个 Plan
+
+一个 Plan 可以包含多个 API，支持轮询分流；一个 Task 绑定一个 Plan，切换 Plan 即可更换模型策略。
 
 #### 4.7.2 任务类型定义
 
@@ -445,10 +431,11 @@ version: 1
 
 #### 4.7.3 设置界面功能
 
-- 每个任务类型可独立配置模型、API Key、Base URL、参数
-- 支持测试连接（发送一条简单请求验证 API Key 是否有效）
+- **API 配置管理**：增删改查各个 LLM API 配置，支持测试连接
+- **Plan 管理**：创建/编辑 API 计划，添加/移除/排序 API 成员
+- **任务绑定**：为每个任务类型选择使用的 Plan
 - API Key 在前端显示为掩码，点击可显示
-- 支持添加自定义 Provider（兼容 OpenAI 协议的任意服务）
+- 支持兼容 OpenAI 协议的任意服务
 
 #### 4.7.4 API Key 存储规则
 
@@ -632,18 +619,45 @@ CREATE TABLE event_participants (
 
 -- 提示词模板（以 Markdown 文件存储在 data/templates/ 中，无需数据库表）
 
--- 模型路由配置
-CREATE TABLE model_routes (
+-- API 配置（单个 LLM 接口）
+CREATE TABLE model_apis (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    api_key_encrypted TEXT,
+    api_base_url TEXT,
+    enabled INTEGER DEFAULT 1,
+    max_tokens INTEGER,
+    temperature REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- API 计划（多个 API 编组，支持轮询）
+CREATE TABLE api_plans (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    round_robin_index INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 计划-API 关联
+CREATE TABLE plan_apis (
+    id INTEGER PRIMARY KEY,
+    plan_id INTEGER REFERENCES api_plans(id) ON DELETE CASCADE,
+    api_id INTEGER REFERENCES model_apis(id) ON DELETE CASCADE,
+    sort_order INTEGER DEFAULT 0
+);
+
+-- 任务-计划绑定
+CREATE TABLE task_plan_bindings (
     id INTEGER PRIMARY KEY,
     task_key TEXT UNIQUE NOT NULL,
-    task_name TEXT NOT NULL,
-    provider TEXT,
-    model TEXT,
-    api_key_encrypted TEXT,
-    base_url TEXT,
-    max_tokens INTEGER DEFAULT 4096,
-    temperature REAL DEFAULT 0.8,
-    enabled INTEGER DEFAULT 1,
+    plan_id INTEGER REFERENCES api_plans(id) ON DELETE SET NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -739,11 +753,19 @@ CREATE TABLE chapter_characters (
 
 #### 模型路由配置
 
-| 方法 | 路径                            | 说明             |
-| ---- | ------------------------------- | ---------------- |
-| GET  | `/model-routes`                 | 获取所有路由配置 |
-| PUT  | `/model-routes/{task_key}`      | 更新指定任务路由 |
-| POST | `/model-routes/{task_key}/test` | 测试连接         |
+| 方法   | 路径                            | 说明             |
+| ------ | ------------------------------- | ---------------- |
+| GET    | `/model-apis`                   | API 配置列表     |
+| POST   | `/model-apis`                   | 创建 API 配置    |
+| PUT    | `/model-apis/{id}`              | 更新 API 配置    |
+| DELETE | `/model-apis/{id}`              | 删除 API 配置    |
+| POST   | `/model-apis/{id}/test`         | 测试连接         |
+| GET    | `/api-plans`                    | Plan 列表        |
+| POST   | `/api-plans`                    | 创建 Plan        |
+| PUT    | `/api-plans/{id}`               | 更新 Plan        |
+| DELETE | `/api-plans/{id}`               | 删除 Plan        |
+| GET    | `/task-bindings`                | 任务绑定列表     |
+| PUT    | `/task-bindings/{task_key}`     | 设置任务绑定     |
 
 #### 日志
 
@@ -887,31 +909,35 @@ AI_Novel/
 │   ├── config.py                 # 配置读取（.env + config.json）
 │   ├── database.py               # SQLAlchemy 引擎和 Session
 │   ├── logger.py                 # loguru 配置
+│   ├── init_db.py                # 数据库初始化脚本
 │   ├── routers/
-│   │   ├── chapters.py
-│   │   ├── generate.py
-│   │   ├── characters.py
-│   │   ├── worldview.py
-│   │   ├── model_routes.py
-│   │   ├── templates.py
-│   │   ├── events.py
-│   │   └── system.py
+│   │   ├── chapters.py           # 章节 & 卷 CRUD + 排序/版本
+│   │   ├── generate.py           # 单章/批量生成（SSE）
+│   │   ├── model_apis.py         # LLM API 配置 CRUD + 测试连接
+│   │   ├── api_plans.py          # API 计划管理（多 API 编组）
+│   │   ├── task_bindings.py      # 任务类型 → Plan 绑定
+│   │   ├── templates.py          # 提示词模板文件 CRUD
+│   │   ├── characters.py         # 人物 & 关系 CRUD（待实现）
+│   │   ├── worldview.py          # 世界观设定读写（待实现）
+│   │   ├── events.py             # 世界事件 CRUD（待实现）
+│   │   └── system.py             # 系统设置/统计/导出（待实现）
 │   ├── services/
 │   │   ├── generator.py          # 生成引擎核心
-│   │   ├── prompt_builder.py     # 提示词组装
-│   │   ├── model_router.py       # 模型路由选择
-│   │   └── log_streamer.py       # 日志 SSE 推送
+│   │   ├── prompt_builder.py     # 提示词组装（模板 + 变量）
+│   │   ├── model_router.py       # 模型路由：Task → Plan → API 解析
+│   │   └── log_streamer.py       # 日志 SSE 推送（待实现）
 │   ├── models/
-│   │   ├── chapter.py
-│   │   ├── character.py
-│   │   ├── item.py
-│   │   ├── event.py
-│   │   ├── template.py
-│   │   └── model_route.py
+│   │   ├── chapter.py            # Volume, Chapter, ChapterVersion
+│   │   ├── character.py          # Character, CharacterRelation
+│   │   ├── item.py               # Item, ItemOwnershipHistory
+│   │   ├── event.py              # WorldEvent, EventParticipant
+│   │   ├── model_api.py          # ModelApi（单个 LLM API 配置）
+│   │   ├── api_plan.py           # ApiPlan, PlanApi, TaskPlanBinding
+│   │   └── story_line.py         # StoryLine, ChapterStoryLine, ChapterCharacter
 │   ├── repositories/             # 数据库操作封装
-│   │   ├── chapter_repo.py
-│   │   ├── character_repo.py
-│   │   └── ...
+│   │   ├── chapter_repo.py       # 章节操作（已实现）
+│   │   ├── character_repo.py     # 人物操作（待实现）
+│   │   └── event_repo.py         # 事件操作（待实现）
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
@@ -920,53 +946,37 @@ AI_Novel/
 │   │   ├── router/
 │   │   │   └── index.js
 │   │   ├── stores/
-│   │   │   ├── chapters.js
-│   │   │   ├── characters.js
-│   │   │   ├── worldview.js
-│   │   │   └── settings.js
+│   │   │   └── chapters.js       # 章节列表状态
 │   │   ├── api/
-│   │   │   ├── chapters.js
-│   │   │   ├── characters.js
-│   │   │   ├── generate.js
-│   │   │   ├── worldview.js
-│   │   │   └── settings.js
+│   │   │   ├── chapters.js       # 章节 API 封装
+│   │   │   ├── generate.js       # 生成（SSE EventSource）
+│   │   │   ├── model-apis.js     # API 配置接口
+│   │   │   ├── plans.js          # Plan 管理接口
+│   │   │   ├── task-bindings.js  # 任务绑定接口
+│   │   │   ├── settings.js       # 系统设置接口
+│   │   │   ├── characters.js     # 人物接口（待实现）
+│   │   │   └── worldview.js      # 世界观接口（待实现）
 │   │   ├── views/
-│   │   │   ├── Dashboard.vue
-│   │   │   ├── OutlineView.vue
-│   │   │   ├── ChapterEditor.vue
-│   │   │   ├── WorldviewEditor.vue
-│   │   │   ├── MapEditor.vue
-│   │   │   ├── CharacterList.vue
-│   │   │   ├── CharacterDetail.vue
-│   │   │   ├── CharacterGraph.vue
-│   │   │   ├── ItemManager.vue
-│   │   │   ├── Timeline.vue
-│   │   │   ├── TemplateLibrary.vue
-│   │   │   ├── ModelRouteSettings.vue
-│   │   │   ├── SystemSettings.vue
-│   │   │   └── LogViewer.vue
+│   │   │   ├── Dashboard.vue     # 工作台（仪表板骨架）
+│   │   │   ├── OutlineView.vue   # 大纲树形视图
+│   │   │   ├── ChapterEditor.vue # 章节编辑器（三列布局 + SSE 生成）
+│   │   │   └── ModelRouteSettings.vue  # API/Plan/Task 配置页
 │   │   └── components/
-│   │       ├── layout/
-│   │       │   ├── SideNav.vue
-│   │       │   └── TopBar.vue
-│   │       ├── chapter/
-│   │       │   ├── ChapterList.vue
-│   │       │   └── VersionHistory.vue
+│   │       ├── layout/           # 布局组件（待填充）
+│   │       ├── chapter/          # 章节子组件（待填充）
 │   │       └── common/
-│   │           ├── StreamOutput.vue    # SSE 流式显示组件
-│   │           └── LogTag.vue          # 日志级别标签
+│   │           └── StreamOutput.vue  # SSE 流式文本显示
 │   ├── vite.config.js
 │   └── package.json
 ├── data/
-│   ├── worldview.json
-│   ├── map.json
-│   ├── config.json
-│   ├── writing_style.json
-│   └── templates/                    # 提示词模板（.md 文件）
-├── logs/                             # 自动生成
-├── novel.db                          # SQLite 数据库
-├── .env                              # API Keys（不提交 git）
-├── .env.example                      # 示例
+│   ├── worldview.json            # 世界观设定
+│   ├── config.json               # 系统配置 + 版本号
+│   ├── writing_style.json        # 全局写作风格
+│   └── templates/                # 提示词模板（.md 文件）
+├── logs/                         # 自动生成
+├── novel.db                      # SQLite 数据库
+├── .env                          # API Keys（不提交 git）
+├── .env.example
 └── README.md
 ```
 

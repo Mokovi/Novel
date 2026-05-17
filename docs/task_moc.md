@@ -1,7 +1,7 @@
 # AI_Novel 项目任务拆分
 
-**版本：** v1.0  
-**日期：** 2026-05-17  
+**版本：** 见 `data/config.json`（当前 0.2.0）
+**日期：** 2026-05-17
 **原则：** 渐进式披露 · 单任务单边界 · 可独立交付
 
 ---
@@ -74,7 +74,8 @@
 - `models/character.py`：`Character`、`CharacterRelation` ORM 类
 - `models/item.py`：`Item`、`ItemOwnershipHistory` ORM 类
 - `models/event.py`：`WorldEvent`、`EventParticipant` ORM 类
-- `models/model_route.py`：`ModelRoute` ORM 类
+- `models/model_api.py`：`ModelApi` ORM 类
+- `models/api_plan.py`：`ApiPlan`、`PlanApi`、`TaskPlanBinding` ORM 类
 - `models/story_line.py`：`StoryLine`、`ChapterStoryLine`、`ChapterCharacter` ORM 类
 - `init_db.py`：运行即创建所有表的脚本
 
@@ -125,34 +126,42 @@
 
 ### P1-T4 · 模型路由配置接口与存储
 
-**模块边界：** `backend/routers/model_routes.py`、`backend/services/model_router.py`
+**模块边界：** `backend/routers/model_apis.py`、`backend/routers/api_plans.py`、`backend/routers/task_bindings.py`、`backend/services/model_router.py`
 
 **类型：** backend
 
 **依赖：** P1-T2
 
-**描述：**  
-实现模型路由配置的 CRUD，支持 5 个预定义任务 key，API Key 简单混淆后存库，提供测试连接接口。
+**描述：**
+实现三层模型路由架构：**ModelApi（单个 API 配置）→ ApiPlan（API 编组 + 轮询）→ TaskPlanBinding（任务绑定 Plan）**。支持 5 个预定义任务 key，API Key 简单混淆后存库，提供测试连接接口。初始 commit 为 `b85cd9e`，后续重构为当前架构（`69d2ecd`）。
 
 **交付物：**
 
-- `routers/model_routes.py`：
-
-| 方法 | 路径                                   | 说明                             |
-| ---- | -------------------------------------- | -------------------------------- |
-| GET  | `/api/v1/model-routes`                 | 获取所有路由配置（Key 返回掩码） |
-| PUT  | `/api/v1/model-routes/{task_key}`      | 更新指定任务路由                 |
-| POST | `/api/v1/model-routes/{task_key}/test` | 发送测试请求验证连通性           |
-
-- `services/model_router.py`：`get_route_config(task_key)` 函数，返回解密后的完整配置
-- API Key 加解密工具函数（base64 + 本地 salt，存入 `api_key_encrypted` 字段）
-- 数据库预置 5 个任务 key 的空行（`outline_design` / `chapter_writing` / `character_design` / `worldbuilding` / `revision`）
+- `routers/model_apis.py` — API 配置 CRUD + 测试连接：
+  - `GET /api/v1/model-apis` — 列表
+  - `POST /api/v1/model-apis` — 创建
+  - `PUT /api/v1/model-apis/{id}` — 更新
+  - `DELETE /api/v1/model-apis/{id}` — 删除
+  - `POST /api/v1/model-apis/{id}/test` — 测试连接
+- `routers/api_plans.py` — API 计划管理：
+  - `GET /api/v1/api-plans` — 列表
+  - `POST /api/v1/api-plans` — 创建（含 API 成员）
+  - `PUT /api/v1/api-plans/{id}` — 更新
+  - `DELETE /api/v1/api-plans/{id}` — 删除
+- `routers/task_bindings.py` — 任务绑定：
+  - `GET /api/v1/task-bindings` — 所有绑定
+  - `PUT /api/v1/task-bindings/{task_key}` — 设置任务 → Plan
+- `services/model_router.py`：`resolve_model_config(task_key)` — 从 Task → Plan → API 链路解析最终模型配置
+- `models/model_api.py`：`ModelApi` ORM（name, provider, model_name, api_key_encrypted, api_base_url, enabled, max_tokens, temperature）
+- `models/api_plan.py`：`ApiPlan`、`PlanApi`、`TaskPlanBinding` ORM
+- API Key 加解密工具函数（base64 + 本地 salt）
+- 数据库预置 5 个任务 key 的默认绑定行
 
 **验收标准：**
 
 - 写入 API Key 后，数据库中存储的不是明文
 - `test` 接口向对应 LLM 发送 `"hello"` 并返回 `{"success": true}` 或错误信息
-- 未配置的路由返回 `enabled: false`
+- Task → Plan → API 链路正确解析，支持 Plan 内多个 API 轮询
 
 ---
 
