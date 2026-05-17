@@ -56,6 +56,7 @@ import AppIcon from './components/common/AppIcon.vue'
 import DashboardIcon from './assets/icons/DashboardIcon.vue'
 import OutlineIcon from './assets/icons/OutlineIcon.vue'
 import EditorIcon from './assets/icons/EditorIcon.vue'
+import WorldviewIcon from './assets/icons/WorldviewIcon.vue'
 import SettingsIcon from './assets/icons/SettingsIcon.vue'
 
 const router = useRouter()
@@ -82,6 +83,11 @@ const menuOptions = [
     label: '章节编辑器',
     key: 'editor',
     icon: () => h(EditorIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
+  },
+  {
+    label: '世界观',
+    key: 'worldview',
+    icon: () => h(WorldviewIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
   },
   {
     label: 'API 配置',

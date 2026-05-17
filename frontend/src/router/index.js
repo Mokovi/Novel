@@ -17,6 +17,11 @@ const routes = [
     component: () => import('../views/ChapterEditor.vue'),
   },
   {
+    path: '/worldview',
+    name: 'worldview',
+    component: () => import('../views/WorldviewEditor.vue'),
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('../views/ModelRouteSettings.vue'),
