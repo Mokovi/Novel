@@ -1,30 +1,35 @@
 <template>
-  <n-space vertical :size="16">
-    <n-h1>模型路由配置</n-h1>
-    <n-p>管理模型 API、方案和功能绑定。</n-p>
+  <div class="settings-page">
+    <h1 class="page-title">模型路由配置</h1>
+    <p class="page-desc">管理模型 API、方案和功能绑定。</p>
 
     <n-tabs v-model:value="activeTab" type="line">
       <!-- Tab 1: Model APIs -->
       <n-tab-pane name="apis" tab="模型 API">
-        <n-space vertical :size="12">
-          <n-button type="primary" @click="openApiCreate">添加 API</n-button>
-          <n-card v-for="api in apis" :key="api.id" size="small">
-            <template #header>
-              <n-space align="center" justify="space-between">
-                <n-text strong>{{ api.name }}</n-text>
-                <n-tag :type="api.enabled ? 'success' : 'default'" size="small">
-                  {{ api.enabled ? '启用' : '禁用' }}
-                </n-tag>
-              </n-space>
-            </template>
-            <n-descriptions :column="2" size="small" bordered>
-              <n-descriptions-item label="提供商">{{ api.provider }}</n-descriptions-item>
-              <n-descriptions-item label="模型">{{ api.model_name }}</n-descriptions-item>
-              <n-descriptions-item label="API Key">{{ api.api_key_masked || '-' }}</n-descriptions-item>
-              <n-descriptions-item label="Base URL">{{ api.api_base_url || '(默认)' }}</n-descriptions-item>
-            </n-descriptions>
-            <template #action>
-              <n-space>
+        <div class="tab-content">
+          <n-button type="primary" @click="openApiCreate" class="add-btn">添加 API</n-button>
+          <div class="card-list">
+            <div
+              v-for="api in apis"
+              :key="api.id"
+              class="api-card"
+              :class="{ disabled: !api.enabled }"
+            >
+              <div class="card-header">
+                <div class="card-header-left">
+                  <n-text class="card-title">{{ api.name }}</n-text>
+                  <n-tag :type="api.enabled ? 'success' : 'default'" size="small">
+                    {{ api.enabled ? '启用' : '禁用' }}
+                  </n-tag>
+                </div>
+              </div>
+              <n-descriptions :column="2" size="small" bordered class="card-descriptions">
+                <n-descriptions-item label="提供商">{{ api.provider }}</n-descriptions-item>
+                <n-descriptions-item label="模型">{{ api.model_name }}</n-descriptions-item>
+                <n-descriptions-item label="API Key">{{ api.api_key_masked || '-' }}</n-descriptions-item>
+                <n-descriptions-item label="Base URL">{{ api.api_base_url || '(默认)' }}</n-descriptions-item>
+              </n-descriptions>
+              <div class="card-actions">
                 <n-button size="small" @click="openApiEdit(api)">编辑</n-button>
                 <n-button size="small" :loading="apiTesting === api.id" @click="testApiConnection(api.id)">测试</n-button>
                 <n-tag v-if="testResults[api.id]" :type="testResults[api.id].success ? 'success' : 'error'" size="small">
@@ -32,81 +37,89 @@
                 </n-tag>
                 <n-popconfirm @positive-click="removeApi(api.id)">
                   <template #trigger>
-                    <n-button size="small" type="error">删除</n-button>
+                    <n-button size="small" class="btn-danger-text">删除</n-button>
                   </template>
                   确认删除此 API？
                 </n-popconfirm>
-              </n-space>
-            </template>
-          </n-card>
-          <n-empty v-if="!apis.length" description="暂无模型 API，点击添加" />
-        </n-space>
+              </div>
+            </div>
+            <n-empty v-if="!apis.length" description="暂无模型 API，点击添加" class="empty-state" />
+          </div>
+        </div>
       </n-tab-pane>
 
       <!-- Tab 2: Plans -->
       <n-tab-pane name="plans" tab="方案管理">
-        <n-space vertical :size="12">
-          <n-button type="primary" @click="openPlanCreate">添加方案</n-button>
-          <n-card v-for="plan in plans" :key="plan.id" size="small">
-            <template #header>
-              <n-text strong>{{ plan.name }}</n-text>
-            </template>
-            <n-p v-if="plan.description" depth="3">{{ plan.description }}</n-p>
-            <n-tag v-for="(api, i) in plan.apis" :key="api.id" style="margin: 2px">
-              {{ i + 1 }}. {{ api.name }} ({{ api.model_name }})
-              <n-tag :type="api.enabled ? 'success' : 'default'" size="small" style="margin-left: 4px">
-                {{ api.enabled ? '启用' : '禁用' }}
-              </n-tag>
-            </n-tag>
-            <n-empty v-if="!plan.apis.length" description="方案中没有 API" size="small" />
-            <template #action>
-              <n-space>
+        <div class="tab-content">
+          <n-button type="primary" @click="openPlanCreate" class="add-btn">添加方案</n-button>
+          <div class="card-list">
+            <div v-for="plan in plans" :key="plan.id" class="plan-card">
+              <div class="card-header">
+                <n-text class="card-title">{{ plan.name }}</n-text>
+              </div>
+              <p v-if="plan.description" class="plan-desc">{{ plan.description }}</p>
+              <div class="plan-apis">
+                <div
+                  v-for="(api, i) in plan.apis"
+                  :key="api.id"
+                  class="plan-api-item"
+                >
+                  <span class="plan-api-index">{{ i + 1 }}</span>
+                  <span class="plan-api-name">{{ api.name }} ({{ api.model_name }})</span>
+                  <n-tag :type="api.enabled ? 'success' : 'default'" size="small">
+                    {{ api.enabled ? '启用' : '禁用' }}
+                  </n-tag>
+                </div>
+                <n-empty v-if="!plan.apis.length" description="方案中没有 API" size="small" />
+              </div>
+              <div class="card-actions">
                 <n-button size="small" @click="openPlanEdit(plan)">编辑</n-button>
                 <n-popconfirm @positive-click="removePlan(plan.id)">
                   <template #trigger>
-                    <n-button size="small" type="error">删除</n-button>
+                    <n-button size="small" class="btn-danger-text">删除</n-button>
                   </template>
                   确认删除此方案？
                 </n-popconfirm>
-              </n-space>
-            </template>
-          </n-card>
-          <n-empty v-if="!plans.length" description="暂无方案，点击添加" />
-        </n-space>
+              </div>
+            </div>
+            <n-empty v-if="!plans.length" description="暂无方案，点击添加" class="empty-state" />
+          </div>
+        </div>
       </n-tab-pane>
 
       <!-- Tab 3: Bindings -->
       <n-tab-pane name="bindings" tab="功能绑定">
-        <n-space vertical :size="12">
-          <n-card v-for="key of taskKeys" :key="key" size="small">
-            <template #header>
-              <n-text strong>{{ taskLabels[key] || key }}</n-text>
-              <n-tag style="margin-left: 8px" size="small">{{ key }}</n-tag>
-            </template>
-            <n-form-item label="使用方案">
-              <n-select
-                :value="getBindingPlanId(key)"
-                :options="planSelectOptions"
-                :loading="bindingSaving === key"
-                @update:value="(v) => onBind(key, v)"
-              />
-            </n-form-item>
-            <template v-if="getBindingPlanId(key)">
-              <n-text depth="3">
-                绑定的方案中包含 API：
-                <n-tag
-                  v-for="api in (plans.find(p => p.id === getBindingPlanId(key))?.apis || [])"
-                  :key="api.id"
-                  style="margin: 2px"
-                  size="small"
-                  :type="api.enabled ? 'success' : 'default'"
-                >
-                  {{ api.name }} ({{ api.model_name }})
-                </n-tag>
-              </n-text>
-            </template>
-          </n-card>
-        </n-space>
+        <div class="tab-content">
+          <div class="card-list">
+            <div v-for="key of taskKeys" :key="key" class="binding-card">
+              <div class="card-header">
+                <n-text class="card-title">{{ taskLabels[key] || key }}</n-text>
+                <n-tag size="small">{{ key }}</n-tag>
+              </div>
+              <n-form-item label="使用方案" class="binding-select">
+                <n-select
+                  :value="getBindingPlanId(key)"
+                  :options="planSelectOptions"
+                  :loading="bindingSaving === key"
+                  @update:value="(v) => onBind(key, v)"
+                />
+              </n-form-item>
+              <div v-if="getBindingPlanId(key)" class="binding-apis">
+                <n-text depth="3" class="binding-apis-label">绑定的方案中包含 API：</n-text>
+                <div class="binding-api-tags">
+                  <n-tag
+                    v-for="api in (plans.find(p => p.id === getBindingPlanId(key))?.apis || [])"
+                    :key="api.id"
+                    size="small"
+                    :type="api.enabled ? 'success' : 'default'"
+                  >
+                    {{ api.name }} ({{ api.model_name }})
+                  </n-tag>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </n-tab-pane>
     </n-tabs>
 
@@ -167,7 +180,7 @@
         </template>
       </n-card>
     </n-modal>
-  </n-space>
+  </div>
 </template>
 
 <script setup>
@@ -368,3 +381,178 @@ function getBindingPlanId(taskKey) {
   return b?.plan_id || null
 }
 </script>
+
+<style scoped>
+.settings-page {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 6px;
+}
+
+.page-desc {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin: 0 0 24px;
+}
+
+.tab-content {
+  animation: fade-in 0.3s ease;
+}
+
+.add-btn {
+  margin-bottom: 16px;
+}
+
+/* Card list */
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* API Card */
+.api-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  border-left: 3px solid var(--color-success);
+  animation: fade-in-up 0.35s ease both;
+}
+
+.api-card.disabled {
+  border-left-color: var(--color-text-muted);
+  opacity: 0.75;
+}
+
+/* Plan Card */
+.plan-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  animation: fade-in-up 0.35s ease both;
+}
+
+.plan-desc {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 4px 0 12px;
+}
+
+.plan-apis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.plan-api-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.plan-api-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.plan-api-name {
+  color: var(--color-text-primary);
+}
+
+/* Binding Card */
+.binding-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  animation: fade-in-up 0.35s ease both;
+}
+
+.binding-select {
+  margin-top: 8px;
+}
+
+.binding-select :deep(.n-form-item-label) {
+  font-size: 13px;
+}
+
+.binding-apis {
+  margin-top: 8px;
+}
+
+.binding-apis-label {
+  font-size: 12px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.binding-api-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Shared */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.card-descriptions {
+  margin-bottom: 12px;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-danger-text {
+  color: var(--color-error) !important;
+}
+
+.empty-state {
+  margin-top: 40px;
+}
+</style>

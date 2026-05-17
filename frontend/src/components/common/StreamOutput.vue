@@ -1,7 +1,7 @@
 <template>
-  <div class="stream-output">
+  <div class="stream-output" :class="{ 'is-streaming': streaming }">
     <div ref="scrollRef" class="stream-content">
-      {{ displayText }}
+      {{ displayText }}<span v-if="streaming && displayText" class="stream-cursor" />
     </div>
   </div>
 </template>
@@ -29,19 +29,38 @@ watch(() => props.content, (val) => {
 
 <style scoped>
 .stream-output {
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  background: #fafafa;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-editor);
   height: 100%;
   overflow: hidden;
+  border-left: 3px solid var(--color-border);
+  transition: border-color var(--transition-base);
 }
+
+.stream-output.is-streaming {
+  border-left-color: var(--color-accent);
+}
+
 .stream-content {
-  padding: 16px;
+  padding: 20px 24px;
   white-space: pre-wrap;
   word-wrap: break-word;
-  font-size: 14px;
-  line-height: 1.7;
+  font-family: var(--font-editor);
+  font-size: 16px;
+  line-height: 1.9;
   height: 100%;
   overflow-y: auto;
+  color: var(--color-text-primary);
+}
+
+.stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--color-accent);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 0.8s step-end infinite;
 }
 </style>
