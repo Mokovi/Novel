@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import chapters, model_routes, templates
+from backend.routers import chapters, generate, model_routes, templates
 
 app = FastAPI(
     title="AI_Novel",
@@ -20,6 +20,7 @@ app.add_middleware(
 )
 
 app.include_router(chapters.router)
+app.include_router(generate.router)
 app.include_router(model_routes.router)
 app.include_router(templates.router)
 

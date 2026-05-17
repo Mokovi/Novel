@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from backend.models.chapter import Chapter, Volume
+from backend.models.chapter import Chapter, ChapterVersion, Volume
 from backend.schemas.chapter import (
     ChapterCreate,
     ChapterUpdate,
@@ -71,6 +71,39 @@ def delete_chapter(db: Session, chapter_id: int) -> bool:
     db.delete(chapter)
     db.commit()
     return True
+
+
+def save_generated_content(
+    db: Session,
+    chapter_id: int,
+    content: str,
+    word_count: int,
+    prompt_snapshot: str,
+    model_used: str,
+) -> Chapter:
+    """Save generated content: create ChapterVersion and update Chapter."""
+    chapter = db.get(Chapter, chapter_id)
+    if not chapter:
+        raise ValueError(f"Chapter {chapter_id} not found")
+
+    # Create version record
+    version = ChapterVersion(
+        chapter_id=chapter_id,
+        content=content,
+        word_count=word_count,
+        prompt_snapshot=prompt_snapshot,
+        model_used=model_used,
+        version_type="generated",
+    )
+    db.add(version)
+
+    # Update chapter
+    chapter.content = content
+    chapter.word_count = word_count
+    chapter.status = "completed"
+    db.commit()
+    db.refresh(chapter)
+    return chapter
 
 
 def reorder_chapters(db: Session, items: list[ReorderItem]) -> None:

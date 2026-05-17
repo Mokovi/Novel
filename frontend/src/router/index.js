@@ -6,6 +6,21 @@ const routes = [
     name: 'dashboard',
     component: () => import('../views/Dashboard.vue'),
   },
+  {
+    path: '/outline',
+    name: 'outline',
+    component: () => import('../views/OutlineView.vue'),
+  },
+  {
+    path: '/editor/:id?',
+    name: 'editor',
+    component: () => import('../views/ChapterEditor.vue'),
+  },
+  {
+    path: '/settings',
+    name: 'settings',
+    component: () => import('../views/ModelRouteSettings.vue'),
+  },
 ]
 
 const router = createRouter({
