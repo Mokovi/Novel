@@ -32,6 +32,11 @@ const routes = [
     component: () => import('../views/CharacterDetail.vue'),
   },
   {
+    path: '/templates',
+    name: 'templates',
+    component: () => import('../views/TemplateLibrary.vue'),
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('../views/ModelRouteSettings.vue'),
