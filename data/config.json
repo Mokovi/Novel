@@ -1,0 +1,10 @@
+{
+  "modules": {
+    "world_builder": true,
+    "character_manager": true,
+    "timeline_manager": true,
+    "prompt_library": true,
+    "model_router": true,
+    "log_viewer": true
+  }
+}
