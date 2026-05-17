@@ -49,7 +49,27 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
-### 4. Goal-Driven Execution
+### 4. External State Over Context Memory
+
+**Don't rely on conversation history alone. Write it down.**
+
+Project state must not depend solely on dialogue context. Track in documented files:
+
+- **Current task** — what's actively being worked on
+- **Completed modules** — what's been done and committed
+- **Pending design decisions** — choices deferred or unresolved
+- **Known issues** — bugs, limitations, accepted tech debt
+- **Acceptance criteria** — verification checklist for milestones
+
+Refer to `docs/progress.md` for the canonical project state. Update it when:
+- A task starts or completes
+- A design decision is made or changed
+- A new issue is discovered
+- Milestone acceptance criteria are met
+
+This ensures interrupt-resilient workflows and is essential for long-lived, multi-phase projects.
+
+### 5. Goal-Driven Execution
 
 **Define success criteria. Loop until verified.**
 
@@ -65,13 +85,13 @@ For multi-step tasks, state a brief plan:
 3. [Step] → verify: [check]
 ```
 
-### 5. Design Principles
+### 6. Design Principles
 
 - **Template-engine separation.** Prompt templates (.md) are decoupled from the generation engine. Template changes don't require code changes.
 - **Task-level model routing.** Each task type (chapter_writing, outline_design, etc.) independently configures provider/model/params.
 - **API key storage:** Frontend config (SQLite) > .env fallback. Simple obfuscation (base64 + local salt) in DB, NOT plaintext.
 
-### 6. Git Workflow
+### 7. Git Workflow
 
 - Initialize git at project root before any coding begins.
 - Commit after every completed task (each `P{phase}-T{task}` in `docs/task_moc.md`).
