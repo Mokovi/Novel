@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { getWorldview, updateWorldview, getInjectPreview } from '../api/worldview.js'
+import * as booksApi from '../api/books.js'
 
 export const useWorldviewStore = defineStore('worldview', {
   state: () => ({
@@ -9,6 +10,7 @@ export const useWorldviewStore = defineStore('worldview', {
     previewText: '',
     previewTokenEstimate: 0,
     previewLoading: false,
+    _bookId: null,
   }),
 
   getters: {
@@ -20,17 +22,20 @@ export const useWorldviewStore = defineStore('worldview', {
       }))
     },
     isGlossary: (state) => (key) => key === '术语表',
-    /**
-     * Get the content of a specific section by key.
-     */
     sectionContent: (state) => (key) => state.data[key] ?? null,
   },
 
   actions: {
+    setBookId(bookId) {
+      this._bookId = bookId
+    },
+
     async fetch() {
       this.loading = true
       try {
-        const res = await getWorldview()
+        const res = this._bookId
+          ? await booksApi.getBookWorldview(this._bookId)
+          : await getWorldview()
         this.data = res.data
       } finally {
         this.loading = false
@@ -42,7 +47,13 @@ export const useWorldviewStore = defineStore('worldview', {
       if (content === undefined) return
       this.saving = true
       try {
-        await updateWorldview(content, sectionKey)
+        if (this._bookId) {
+          const full = { ...this.data }
+          full[sectionKey] = content
+          await booksApi.updateBookWorldview(this._bookId, JSON.stringify(full))
+        } else {
+          await updateWorldview(content, sectionKey)
+        }
       } finally {
         this.saving = false
       }
@@ -51,7 +62,11 @@ export const useWorldviewStore = defineStore('worldview', {
     async saveAll() {
       this.saving = true
       try {
-        await updateWorldview(this.data)
+        if (this._bookId) {
+          await booksApi.updateBookWorldview(this._bookId, JSON.stringify(this.data))
+        } else {
+          await updateWorldview(this.data)
+        }
       } finally {
         this.saving = false
       }

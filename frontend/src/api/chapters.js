@@ -81,3 +81,21 @@ export function deleteArc(id) {
 export function reorderArcs(items) {
   return http.put('/arcs/reorder', { items })
 }
+
+// ── Book-scoped API ───────────────────────────────────────
+
+export function listBookVolumes(bookId) {
+  return http.get(`/books/${bookId}/volumes`)
+}
+
+export function createBookVolume(bookId, data) {
+  return http.post(`/books/${bookId}/volumes`, data)
+}
+
+export function listBookChapters(bookId, params = {}) {
+  return http.get(`/books/${bookId}/chapters`, { params })
+}
+
+export function listBookArcs(bookId, params = {}) {
+  return http.get(`/books/${bookId}/arcs`, { params })
+}

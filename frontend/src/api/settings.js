@@ -19,3 +19,13 @@ export function getBookOutline() {
 export function updateBookOutline(data) {
   return http.put('/settings/book-outline', data)
 }
+
+// ── Book-scoped outline API ───────────────────────────────
+
+export function getScopedBookOutline(bookId) {
+  return http.get(`/books/${bookId}/outline`)
+}
+
+export function updateScopedBookOutline(bookId, data) {
+  return http.put(`/books/${bookId}/outline`, data)
+}

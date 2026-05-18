@@ -501,11 +501,12 @@
 
 <script setup>
 import { ref, onMounted, computed, reactive, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { marked } from 'marked'
 import { useChaptersStore } from '../stores/chapters.js'
 import { useSettingsStore } from '../stores/settings.js'
+import { useBooksStore } from '../stores/books.js'
 import {
   createVolume, createChapter, deleteChapter, deleteVolume,
   downloadChapter, downloadAllChapters,
@@ -514,13 +515,21 @@ import {
 } from '../api/chapters.js'
 import {
   generateArcOutline, generateVolumeOutline, generateBookOutline,
+  generateBookOutlineScoped,
   regenerateSummary,
 } from '../api/generate.js'
+import { getBookOutline, updateBookOutline } from '../api/books.js'
 
 const router = useRouter()
+const route = useRoute()
 const message = useMessage()
 const store = useChaptersStore()
 const settingsStore = useSettingsStore()
+const booksStore = useBooksStore()
+
+const bookId = computed(() => {
+  return route.params.bookId ? Number(route.params.bookId) : booksStore.currentBookId
+})
 
 const showCreateVolume = ref(false)
 const showCreateChapter = ref(false)
@@ -545,7 +554,18 @@ function toggleOutlineMode(key) {
 
 // Book outline
 const bookOutline = ref('')
+const bookOutlineCache = ref('')
 const showBookOutline = ref(false)
+
+async function loadBookOutline(bId) {
+  try {
+    const res = await getBookOutline(bId)
+    bookOutlineCache.value = res.data?.outline || ''
+    bookOutline.value = bookOutlineCache.value
+  } catch {
+    bookOutlineCache.value = ''
+  }
+}
 
 // ── Generation modal state ────────────────────────────────
 const showGenOutput = ref(false)
@@ -795,7 +815,11 @@ async function handleBatchDownload() {
 
 function prepareGenerateBook() {
   bookGenerating.value = true
-  runOutlineSSE('全书大纲', (handlers) => generateBookOutline(handlers), (content) => {
+  const bId = bookId.value
+  const genFn = bId
+    ? (handlers) => generateBookOutlineScoped(bId, handlers)
+    : (handlers) => generateBookOutline(handlers)
+  runOutlineSSE('全书大纲', genFn, (content) => {
     bookOutline.value = content
   })
 }
@@ -826,8 +850,13 @@ watch(showGenOutput, (val) => {
 // ── Save outlines ─────────────────────────────────────────
 
 async function handleSaveBookOutline() {
-  settingsStore.bookOutline = bookOutline.value
-  await settingsStore.saveBookOutline()
+  const bId = bookId.value
+  if (bId) {
+    await updateBookOutline(bId, bookOutline.value)
+  } else {
+    settingsStore.bookOutline = bookOutline.value
+    await settingsStore.saveBookOutline()
+  }
   message.success('全书大纲已保存')
 }
 
@@ -844,13 +873,19 @@ async function handleSaveArcOutline(arc) {
 }
 
 onMounted(async () => {
+  const bId = bookId.value || undefined
   await Promise.all([
-    store.fetchVolumes(),
-    store.fetchChapters(),
-    store.fetchArcs(),
-    settingsStore.fetchBookOutline(),
+    store.fetchVolumes(bId),
+    store.fetchChapters(undefined, bId),
+    store.fetchArcs(undefined, bId),
+    bId ? loadBookOutline(bId) : settingsStore.fetchBookOutline(),
   ])
-  bookOutline.value = settingsStore.bookOutline
+  bookOutline.value = bId ? (bookOutlineCache || settingsStore.bookOutline) : settingsStore.bookOutline
+
+  // Also ensure the books store loads the current book
+  if (bId && !booksStore.currentBook) {
+    booksStore.selectBook(bId).catch(() => {})
+  }
 
   for (const vol of store.volumes) {
     showVolumeOutline[vol.id] = false

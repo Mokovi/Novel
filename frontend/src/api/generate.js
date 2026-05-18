@@ -198,3 +198,49 @@ export async function previewVolumePrompt(volumeId) {
 export async function previewBookPrompt() {
   return previewFetch(`${BASE}/generate/book/preview`)
 }
+
+// ── Book-scoped generate APIs ─────────────────────────────
+
+export function generateBookOutlineScoped(bookId, handlers, overrides = {}) {
+  return consumeSSE(`${BASE}/books/${bookId}/generate/book`, handlers, overrides)
+}
+
+export async function previewBookPromptScoped(bookId) {
+  return previewFetch(`${BASE}/books/${bookId}/generate/book/preview`)
+}
+
+export function generateBookChapter(bookId, chapterId, handlers, overrides = {}) {
+  return consumeSSE(`${BASE}/books/${bookId}/generate/chapter/${chapterId}`, handlers, overrides)
+}
+
+export async function previewBookChapterPrompt(bookId, chapterId) {
+  return previewFetch(`${BASE}/books/${bookId}/generate/chapter/${chapterId}/preview`)
+}
+
+export async function regenerateBookChapterSummary(bookId, chapterId) {
+  const resp = await fetch(`${BASE}/books/${bookId}/generate/chapter/${chapterId}/summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(err.detail || `HTTP ${resp.status}`)
+  }
+  return resp.json()
+}
+
+export function generateBookArcOutline(bookId, arcId, handlers, overrides = {}) {
+  return consumeSSE(`${BASE}/books/${bookId}/generate/arc/${arcId}`, handlers, overrides)
+}
+
+export async function previewBookArcPrompt(bookId, arcId) {
+  return previewFetch(`${BASE}/books/${bookId}/generate/arc/${arcId}/preview`)
+}
+
+export function generateBookVolumeOutline(bookId, volumeId, handlers, overrides = {}) {
+  return consumeSSE(`${BASE}/books/${bookId}/generate/volume/${volumeId}`, handlers, overrides)
+}
+
+export async function previewBookVolumePrompt(bookId, volumeId) {
+  return previewFetch(`${BASE}/books/${bookId}/generate/volume/${volumeId}/preview`)
+}

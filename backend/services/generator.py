@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from backend.config import DATA_DIR, load_config
 from backend.repositories import chapter_repo
+from backend.models.book import Book
 from backend.models.chapter import Volume
 from backend.services import prompt_builder
 from backend.services.model_router import resolve_api_for_task
@@ -293,8 +294,11 @@ async def generate_ai_summary(
 # ── Prompt variable assembly ────────────────────────────────
 
 
-def build_prompt_variables(db: Session, chapter_id: int) -> dict:
+def build_prompt_variables(db: Session, chapter_id: int, book_id: Optional[int] = None) -> dict:
     """Assemble all prompt variables for a chapter without streaming.
+
+    *book_id* — if provided, worldview and writing_style are loaded from the
+    Book DB record. Otherwise falls back to disk files.
 
     Returns a dict with keys:
         chapter, template, variables, prompt, token_estimate,
@@ -312,9 +316,14 @@ def build_prompt_variables(db: Session, chapter_id: int) -> dict:
     except (FileNotFoundError, ValueError) as e:
         return {"error": str(e)}
 
-    # 3. Build variables from JSON files + chapter data
-    worldview_raw = _read_json_file(DATA_DIR / "worldview.json", "{}")
-    writing_style_text = _read_json_file(DATA_DIR / "writing_style.json", "")
+    # 3. Build variables from DB (book) or disk files + chapter data
+    if book_id:
+        book = db.get(Book, book_id)
+        worldview_raw = book.worldview if book and book.worldview else "{}"
+        writing_style_text = book.writing_style if book and book.writing_style else ""
+    else:
+        worldview_raw = _read_json_file(DATA_DIR / "worldview.json", "{}")
+        writing_style_text = _read_json_file(DATA_DIR / "writing_style.json", "")
 
     try:
         worldview_dict = json.loads(worldview_raw) if worldview_raw.strip() else {}
@@ -395,10 +404,15 @@ async def generate_chapter_stream(
     chapter_id: int,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
+    book_id: Optional[int] = None,
 ) -> AsyncGenerator[str, None]:
-    """Async generator yielding SSE events for chapter generation."""
+    """Async generator yielding SSE events for chapter generation.
+
+    *book_id* — if provided, worldview and writing_style are loaded from the
+    Book DB record. Otherwise falls back to disk files.
+    """
     # 1-5. Assemble prompt variables
-    ctx = build_prompt_variables(db, chapter_id)
+    ctx = build_prompt_variables(db, chapter_id, book_id=book_id)
     if ctx.get("error"):
         yield _sse_event("error", {"message": ctx["error"]})
         return
@@ -457,8 +471,17 @@ async def generate_chapter_stream(
 # ── Outline generation ─────────────────────────────────────
 
 
-def _read_worldview_text() -> str:
-    """Load and return the worldview JSON as a formatted string, or ''."""
+def _load_book_worldview(db: Session, book_id: Optional[int] = None) -> str:
+    """Load worldview from Book DB record, falling back to disk file."""
+    if book_id:
+        book = db.get(Book, book_id)
+        if book and book.worldview:
+            try:
+                d = json.loads(book.worldview) if book.worldview.strip() else {}
+            except json.JSONDecodeError:
+                d = {}
+            return _filter_worldview(d, "medium")
+    # Fallback: read from disk
     raw = _read_json_file(DATA_DIR / "worldview.json", "{}")
     try:
         d = json.loads(raw) if raw.strip() else {}
@@ -467,12 +490,21 @@ def _read_worldview_text() -> str:
     return _filter_worldview(d, "medium")
 
 
-def _read_writing_style() -> str:
+def _load_book_writing_style(db: Session, book_id: Optional[int] = None) -> str:
+    """Load writing style from Book DB record, falling back to disk file."""
+    if book_id:
+        book = db.get(Book, book_id)
+        if book and book.writing_style:
+            return book.writing_style
     return _read_json_file(DATA_DIR / "writing_style.json", "")
 
 
-def build_arc_prompt_variables(db: Session, arc_id: int) -> dict:
-    """Assemble prompt variables for generating an arc outline."""
+def build_arc_prompt_variables(db: Session, arc_id: int, book_id: Optional[int] = None) -> dict:
+    """Assemble prompt variables for generating an arc outline.
+
+    *book_id* — if provided, worldview and writing_style are loaded from the
+    Book DB record. Otherwise falls back to disk files.
+    """
     arc = chapter_repo.get_arc(db, arc_id)
     if not arc:
         return {"error": "Arc not found"}
@@ -489,8 +521,8 @@ def build_arc_prompt_variables(db: Session, arc_id: int) -> dict:
         chapter_lines.append(f"第{i}章: {ch.get('title', '')}\n摘要: {summary}")
     chapter_summaries = "\n\n".join(chapter_lines) if chapter_lines else "（暂无章节）"
 
-    worldview_text = _read_worldview_text()
-    writing_style_text = _read_writing_style()
+    worldview_text = _load_book_worldview(db, book_id)
+    writing_style_text = _load_book_writing_style(db, book_id)
 
     variables = {
         "arc_title": arc.title or "",
@@ -532,8 +564,12 @@ def build_arc_prompt_variables(db: Session, arc_id: int) -> dict:
     }
 
 
-def build_volume_prompt_variables(db: Session, volume_id: int) -> dict:
-    """Assemble prompt variables for generating a volume outline."""
+def build_volume_prompt_variables(db: Session, volume_id: int, book_id: Optional[int] = None) -> dict:
+    """Assemble prompt variables for generating a volume outline.
+
+    *book_id* — if provided, worldview and writing_style are loaded from the
+    Book DB record. Otherwise falls back to disk files.
+    """
     volumes = chapter_repo.list_volumes(db)
     volume = next((v for v in volumes if v.id == volume_id), None)
     if not volume:
@@ -553,8 +589,8 @@ def build_volume_prompt_variables(db: Session, volume_id: int) -> dict:
             arc_lines.append(f"  第{j}章 ({ch.get('title', '')}): {summary}")
     arc_outlines = "\n\n".join(arc_lines) if arc_lines else "（暂无节纲）"
 
-    worldview_text = _read_worldview_text()
-    writing_style_text = _read_writing_style()
+    worldview_text = _load_book_worldview(db, book_id)
+    writing_style_text = _load_book_writing_style(db, book_id)
 
     variables = {
         "volume_title": volume.title or "",
@@ -567,7 +603,13 @@ def build_volume_prompt_variables(db: Session, volume_id: int) -> dict:
     # Inject book outline (if configured)
     gen_config = _get_gen_config()
     if gen_config.get("outline_injection_depth", 1) >= 1:
-        book_outline_text = load_config().get("book_outline", "")
+        book_outline_text = ""
+        if book_id:
+            book = db.get(Book, book_id)
+            if book and book.outline:
+                book_outline_text = book.outline
+        if not book_outline_text:
+            book_outline_text = load_config().get("book_outline", "")
         if book_outline_text:
             variables["book_outline"] = book_outline_text
             logger.info("Injected book outline for volume {}", volume_id)
@@ -596,27 +638,38 @@ def build_volume_prompt_variables(db: Session, volume_id: int) -> dict:
     }
 
 
-def build_book_prompt_variables(db: Session) -> dict:
-    """Assemble prompt variables for generating a book-level outline."""
+def build_book_prompt_variables(db: Session, book_id: Optional[int] = None) -> dict:
+    """Assemble prompt variables for generating a book-level outline.
+
+    *book_id* — if provided, worldview, writing_style, and book outline are
+    loaded from the Book DB record. Otherwise falls back to disk files / config.
+    """
     try:
         template = prompt_builder.load_template("outline_design", "outline_design_book.md")
     except (FileNotFoundError, ValueError) as e:
         return {"error": str(e)}
 
-    volume_outlines_list = chapter_repo.get_all_volume_outlines(db)
+    volume_outlines_list = chapter_repo.get_all_volume_outlines(db, book_id=book_id)
     vol_lines = []
     for v in volume_outlines_list:
         vol_lines.append(f"卷: {v['volume_title']}\n描述: {v['volume_description']}\n卷纲: {v['volume_outline']}")
     volume_outlines = "\n\n".join(vol_lines) if vol_lines else "（暂无卷）"
 
-    worldview_text = _read_worldview_text()
-    writing_style_text = _read_writing_style()
+    worldview_text = _load_book_worldview(db, book_id)
+    writing_style_text = _load_book_writing_style(db, book_id)
 
     variables = {
         "volume_outlines": volume_outlines,
         "worldview": worldview_text,
         "writing_style": writing_style_text,
     }
+
+    # Inject book outline from the Book record
+    if book_id:
+        book = db.get(Book, book_id)
+        if book and book.outline:
+            variables["book_outline"] = book.outline
+            logger.info("Injected book outline from DB for book {}", book_id)
 
     try:
         prompt = prompt_builder.build_prompt(template, variables)

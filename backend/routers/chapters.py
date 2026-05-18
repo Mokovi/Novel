@@ -240,3 +240,44 @@ def delete_arc(arc_id: int, db: Session = Depends(get_db)):
     if not deleted:
         raise HTTPException(status_code=404, detail="Arc not found")
     return None
+
+
+# ── Book-scoped routes ─────────────────────────────────────
+
+
+@router.get("/books/{book_id}/volumes", response_model=list[VolumeResponse])
+def list_book_volumes(book_id: int, db: Session = Depends(get_db)):
+    """Get all volumes for a book, sorted by sort_order."""
+    return chapter_repo.list_volumes(db, book_id=book_id)
+
+
+@router.post("/books/{book_id}/volumes", response_model=VolumeResponse, status_code=201)
+def create_book_volume(book_id: int, body: VolumeCreate, db: Session = Depends(get_db)):
+    """Create a new volume under a book."""
+    volume = chapter_repo.create_volume(db, body)
+    volume.book_id = book_id
+    db.commit()
+    db.refresh(volume)
+    return volume
+
+
+@router.get("/books/{book_id}/chapters", response_model=list[ChapterResponse])
+def list_book_chapters(
+    book_id: int,
+    volume_id: int | None = Query(None, description="Filter by volume ID"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    """Get chapters for a book, with optional volume filter."""
+    return chapter_repo.list_chapters(db, volume_id=volume_id, book_id=book_id, skip=skip, limit=limit)
+
+
+@router.get("/books/{book_id}/arcs", response_model=list[ArcResponse])
+def list_book_arcs(
+    book_id: int,
+    volume_id: int | None = Query(None, description="Filter by volume ID"),
+    db: Session = Depends(get_db),
+):
+    """Get all arcs for a book, optionally filtered by volume."""
+    return chapter_repo.list_arcs(db, volume_id=volume_id, book_id=book_id)

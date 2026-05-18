@@ -108,3 +108,5 @@ def delete_character(character_id: int, db: Session = Depends(get_db)):
     if not deleted:
         raise HTTPException(status_code=404, detail="Character not found")
     return None
+
+

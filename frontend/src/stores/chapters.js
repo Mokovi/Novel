@@ -1,5 +1,13 @@
 import { defineStore } from 'pinia'
-import { listChapters, getChapter, listVolumes, listArcs } from '../api/chapters.js'
+import {
+  getChapter,
+  listVolumes,
+  listChapters,
+  listArcs,
+  listBookVolumes,
+  listBookChapters,
+  listBookArcs,
+} from '../api/chapters.js'
 
 export const useChaptersStore = defineStore('chapters', {
   state: () => ({
@@ -11,20 +19,24 @@ export const useChaptersStore = defineStore('chapters', {
   }),
 
   actions: {
-    async fetchVolumes() {
-      const res = await listVolumes()
+    async fetchVolumes(bookId) {
+      const res = bookId ? await listBookVolumes(bookId) : await listVolumes()
       this.volumes = res.data
     },
 
-    async fetchChapters(volumeId) {
+    async fetchChapters(volumeId, bookId) {
       const params = volumeId ? { volume_id: volumeId } : {}
-      const res = await listChapters(params)
+      const res = bookId
+        ? await listBookChapters(bookId, params)
+        : await listChapters(params)
       this.chapters = res.data
     },
 
-    async fetchArcs(volumeId) {
+    async fetchArcs(volumeId, bookId) {
       const params = volumeId ? { volume_id: volumeId } : {}
-      const res = await listArcs(params)
+      const res = bookId
+        ? await listBookArcs(bookId, params)
+        : await listArcs(params)
       this.arcs = res.data
     },
 

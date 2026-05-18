@@ -39,3 +39,17 @@ export function updateRelation(id, data) {
 export function deleteRelation(id) {
   return http.delete(`/characters/relations/${id}`)
 }
+
+// ── Book-scoped API ───────────────────────────────────────
+
+export function listBookCharacters(bookId, params = {}) {
+  return http.get(`/books/${bookId}/characters`, { params })
+}
+
+export function createBookCharacter(bookId, data) {
+  return http.post(`/books/${bookId}/characters`, data)
+}
+
+export function getBookRelationsGraph(bookId) {
+  return http.get(`/books/${bookId}/characters/relations`)
+}

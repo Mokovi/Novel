@@ -12,6 +12,9 @@ class WorldEvent(Base):
     __tablename__ = "world_events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    book_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=True
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     event_type: Mapped[str | None] = mapped_column(String(50), nullable=True)

@@ -16,12 +16,15 @@ from backend.schemas.character import (
 def list_characters(
     db: Session,
     role_type: Optional[str] = None,
+    book_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[Character]:
     query = db.query(Character)
     if role_type:
         query = query.filter(Character.role_type == role_type)
+    if book_id is not None:
+        query = query.filter(Character.book_id == book_id)
     return query.order_by(Character.id).offset(skip).limit(limit).all()
 
 
@@ -102,9 +105,12 @@ def delete_relation(db: Session, relation_id: int) -> bool:
     return True
 
 
-def get_relations_graph(db: Session) -> dict:
+def get_relations_graph(db: Session, book_id: Optional[int] = None) -> dict:
     """Return relations formatted for Vue Flow: {nodes: [...], edges: [...]}."""
-    characters = db.query(Character).all()
+    query = db.query(Character)
+    if book_id is not None:
+        query = query.filter(Character.book_id == book_id)
+    characters = query.all()
     relations = db.query(CharacterRelation).all()
 
     nodes = [

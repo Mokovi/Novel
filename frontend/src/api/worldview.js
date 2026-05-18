@@ -16,3 +16,14 @@ export function updateWorldview(data, section) {
 export function getInjectPreview() {
   return http.get('/worldview/inject-preview')
 }
+
+// ── Book-scoped API ───────────────────────────────────────
+
+export function getBookWorldview(bookId) {
+  return http.get(`/books/${bookId}/worldview`)
+}
+
+export function updateBookWorldview(bookId, data, section) {
+  const params = section ? { section } : {}
+  return http.put(`/books/${bookId}/worldview`, data, { params })
+}

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import load_config
-from backend.routers import admin, api_plans, chapters, characters, generate, model_apis, settings, task_bindings, templates, worldview
+from backend.routers import admin, api_plans, books, chapters, characters, generate, model_apis, settings, task_bindings, templates, worldview
 
 config = load_config()
 
@@ -23,6 +23,7 @@ app.add_middleware(
 )
 
 app.include_router(api_plans.router)
+app.include_router(books.router)
 app.include_router(chapters.router)
 app.include_router(characters.router)
 app.include_router(generate.router)

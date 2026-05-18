@@ -91,14 +91,22 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { useWorldviewStore } from '../stores/worldview.js'
+import { useBooksStore } from '../stores/books.js'
 import GlossaryEditor from '../components/worldview/GlossaryEditor.vue'
 import ObjectEditor from '../components/worldview/ObjectEditor.vue'
 import ArrayEditor from '../components/worldview/ArrayEditor.vue'
 
+const route = useRoute()
 const store = useWorldviewStore()
+const booksStore = useBooksStore()
 const message = useMessage()
+
+const bookId = computed(() => {
+  return route.params.bookId ? Number(route.params.bookId) : booksStore.currentBookId
+})
 
 const showPreview = ref(false)
 const dirtySections = ref(new Set())
@@ -151,6 +159,13 @@ watch(showPreview, async (val) => {
 })
 
 onMounted(() => {
+  const bId = bookId.value
+  if (bId) {
+    store.setBookId(bId)
+    if (!booksStore.currentBook) {
+      booksStore.selectBook(bId).catch(() => {})
+    }
+  }
   store.fetch()
 })
 </script>

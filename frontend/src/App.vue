@@ -12,6 +12,9 @@
                 <span class="brand-text">作者工坊</span>
               </div>
 
+              <!-- Book Selector -->
+              <BookSelector />
+
               <!-- Navigation -->
               <n-menu
                 :value="activeMenu"
@@ -58,8 +61,10 @@ import { NConfigProvider, NMessageProvider, NLayout, NLayoutSider, NLayoutConten
 import { zhCN } from 'naive-ui'
 import { lightThemeOverrides } from './styles/naive-theme.js'
 import AppIcon from './components/common/AppIcon.vue'
+import BookSelector from './components/common/BookSelector.vue'
 import AdminLoginModal from './components/common/AdminLoginModal.vue'
 import { useAdminStore } from './stores/admin.js'
+import { useBooksStore } from './stores/books.js'
 import DashboardIcon from './assets/icons/DashboardIcon.vue'
 import OutlineIcon from './assets/icons/OutlineIcon.vue'
 import EditorIcon from './assets/icons/EditorIcon.vue'
@@ -70,10 +75,19 @@ import SettingsIcon from './assets/icons/SettingsIcon.vue'
 
 const router = useRouter()
 const route = useRoute()
+const booksStore = useBooksStore()
 
 const themeOverrides = lightThemeOverrides
 
-const activeMenu = computed(() => route.name || 'dashboard')
+const activeMenu = computed(() => {
+  const name = route.name
+  if (!name) return 'dashboard'
+  if (name === 'book-outline') return 'outline'
+  if (name === 'book-editor') return 'editor'
+  if (name === 'book-worldview') return 'worldview'
+  if (name === 'book-characters' || name === 'book-character-detail') return 'characters'
+  return name
+})
 
 const iconSize = 20
 
@@ -127,11 +141,26 @@ function handleKeydown(e) {
 }
 
 function onMenuSelect(key) {
-  router.push({ name: key })
+  const bookId = booksStore.currentBookId
+  const bookScoped = {
+    outline: 'book-outline',
+    editor: 'book-editor',
+    worldview: 'book-worldview',
+    characters: 'book-characters',
+  }
+  if (bookScoped[key] && bookId) {
+    router.push({ name: bookScoped[key], params: { bookId } })
+  } else {
+    router.push({ name: key })
+  }
 }
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
+  // Ensure current book is loaded
+  try {
+    await booksStore.ensureCurrentBook()
+  } catch { /* fallback */ }
   try {
     const res = await fetch('/api/v1/health')
     const data = await res.json()

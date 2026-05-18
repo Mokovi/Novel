@@ -1,214 +1,219 @@
 <template>
   <div class="dashboard">
-    <!-- Hero -->
     <section class="hero">
-      <h1 class="hero-title">作者工坊</h1>
-      <p class="hero-subtitle">人机协作的长篇叙事创作空间</p>
+      <h1 class="hero-title">我的作品</h1>
+      <p class="hero-subtitle">选择一部作品开始创作，或创建新的作品</p>
     </section>
 
-    <!-- Stats -->
-    <section class="stats-grid">
+    <div class="toolbar">
+      <n-button type="primary" @click="showCreate = true">
+        <template #icon>+</template>
+        新建作品
+      </n-button>
+    </div>
+
+    <!-- Book Grid -->
+    <section v-if="booksStore.loading" class="loading-state">
+      <n-spin size="medium" />
+    </section>
+
+    <section v-else-if="books.length === 0" class="empty-state">
+      <p>还没有作品，点击上方按钮创建你的第一部作品。</p>
+    </section>
+
+    <section v-else class="book-grid">
       <div
-        v-for="(stat, i) in stats"
-        :key="stat.label"
-        class="stat-card"
-        :style="{ animationDelay: `${i * 0.1}s` }"
+        v-for="book in books"
+        :key="book.id"
+        class="book-card"
+        @click="openBook(book.id)"
       >
-        <div class="stat-value">{{ stat.value }}</div>
-        <div class="stat-label">{{ stat.label }}</div>
+        <div class="book-card-header">
+          <h3 class="book-name">{{ book.name }}</h3>
+          <n-button
+            quaternary
+            circle
+            size="tiny"
+            class="delete-btn"
+            @click.stop="confirmDelete(book)"
+          >
+            <template #icon>✕</template>
+          </n-button>
+        </div>
+        <p v-if="book.description" class="book-desc">{{ book.description }}</p>
+        <div class="book-meta">
+          <span>更新于 {{ formatDate(book.updated_at) }}</span>
+        </div>
       </div>
     </section>
 
-    <!-- Quick start -->
-    <section class="quick-start">
-      <h2 class="section-title">快速开始</h2>
-      <div class="quick-cards">
-        <div class="quick-card" @click="goToOutline">
-          <div class="quick-card-icon">
-            <OutlineIcon />
-          </div>
-          <div class="quick-card-content">
-            <h3>管理大纲</h3>
-            <p>创建卷和章节，规划故事结构</p>
-          </div>
-        </div>
-        <div class="quick-card" @click="goToEditor">
-          <div class="quick-card-icon">
-            <EditorIcon />
-          </div>
-          <div class="quick-card-content">
-            <h3>开始写作</h3>
-            <p>编辑章节内容或使用 AI 生成</p>
-          </div>
-        </div>
-      </div>
-    </section>
+    <!-- Create Book Modal -->
+    <n-modal v-model:show="showCreate" preset="card" title="新建作品" style="width: 400px">
+      <n-input v-model:value="newName" placeholder="输入作品名称" @keyup.enter="createBook" />
+      <template #footer>
+        <n-button type="primary" :loading="creating" @click="createBook">创建</n-button>
+      </template>
+    </n-modal>
+
+    <!-- Delete Confirm Dialog -->
+    <n-modal v-model:show="showDelete" preset="dialog" type="warning" title="确认删除"
+      :content="`确定要删除「${deletingBook?.name}」吗？此操作不可撤销，所有关联数据将被清除。`"
+      positive-text="删除"
+      negative-text="取消"
+      @positive-click="doDelete"
+      @negative-click="showDelete = false"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useChaptersStore } from '../stores/chapters.js'
-import OutlineIcon from '../assets/icons/OutlineIcon.vue'
-import EditorIcon from '../assets/icons/EditorIcon.vue'
+import { useBooksStore } from '../stores/books.js'
+import { deleteBook } from '../api/books.js'
 
 const router = useRouter()
-const store = useChaptersStore()
+const booksStore = useBooksStore()
 
-const stats = computed(() => [
-  { label: '卷', value: store.volumes.length },
-  { label: '章节', value: store.chapters.length },
-  { label: '已完成', value: store.chapters.filter(c => c.status === 'completed').length },
-  { label: '总字数', value: totalWords.value },
-])
+const books = computed(() => booksStore.books)
+const showCreate = ref(false)
+const newName = ref('')
+const creating = ref(false)
+const showDelete = ref(false)
+const deletingBook = ref(null)
 
-const totalWords = computed(() =>
-  store.chapters.reduce((sum, c) => sum + (c.word_count || 0), 0)
-)
-
-function goToOutline() {
-  router.push({ name: 'outline' })
+function formatDate(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-function goToEditor() {
-  if (store.chapters.length) {
-    router.push(`/editor/${store.chapters[0].id}`)
-  } else {
-    router.push({ name: 'outline' })
+function openBook(id) {
+  router.push(`/books/${id}/outline`)
+}
+
+async function createBook() {
+  if (!newName.value.trim()) return
+  creating.value = true
+  try {
+    const book = await booksStore.addBook(newName.value.trim())
+    newName.value = ''
+    showCreate.value = false
+    openBook(book.id)
+  } finally {
+    creating.value = false
+  }
+}
+
+function confirmDelete(book) {
+  deletingBook.value = book
+  showDelete.value = true
+}
+
+async function doDelete() {
+  if (!deletingBook.value) return
+  try {
+    await deleteBook(deletingBook.value.id)
+    await booksStore.fetchBooks()
+  } finally {
+    showDelete.value = false
+    deletingBook.value = null
   }
 }
 
 onMounted(async () => {
-  await store.fetchVolumes()
-  await store.fetchChapters()
+  await booksStore.fetchBooks()
 })
 </script>
 
 <style scoped>
 .dashboard {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
-/* Hero */
 .hero {
-  margin-bottom: 36px;
-  animation: fade-in-up 0.5s ease both;
+  margin-bottom: 24px;
 }
 
 .hero-title {
   font-family: var(--font-display);
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 700;
   color: var(--color-text-primary);
   margin: 0 0 8px;
-  letter-spacing: 3px;
 }
 
 .hero-subtitle {
-  font-family: var(--font-body);
-  font-size: 16px;
+  font-size: 15px;
   color: var(--color-text-secondary);
   margin: 0;
 }
 
-/* Stats */
-.stats-grid {
+.toolbar {
+  margin-bottom: 24px;
+}
+
+.book-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 40px;
-}
-
-.stat-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 20px 16px;
-  text-align: center;
-  cursor: default;
-  animation: fade-in-up 0.4s ease both;
-  transition: transform var(--transition-base), box-shadow var(--transition-base);
-}
-
-.stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-card-hover);
-}
-
-.stat-value {
-  font-family: var(--font-display);
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--color-accent);
-  line-height: 1.2;
-  margin-bottom: 4px;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  font-family: var(--font-ui);
-}
-
-/* Quick start */
-.section-title {
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 0 16px;
-}
-
-.quick-cards {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
 }
 
-.quick-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.book-card {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: 20px;
   cursor: pointer;
   transition: transform var(--transition-base), box-shadow var(--transition-base);
-  animation: fade-in-up 0.4s ease both;
-  animation-delay: 0.3s;
 }
 
-.quick-card:hover {
+.book-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-card-hover);
 }
 
-.quick-card-icon {
-  width: 40px;
-  height: 40px;
-  color: var(--color-accent);
-  flex-shrink: 0;
+.book-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
-.quick-card-icon svg {
-  width: 100%;
-  height: 100%;
-}
-
-.quick-card-content h3 {
+.book-name {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--color-text-primary);
-  margin: 0 0 4px;
+  margin: 0 0 8px;
 }
 
-.quick-card-content p {
+.delete-btn {
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.book-card:hover .delete-btn {
+  opacity: 1;
+}
+
+.book-desc {
   font-size: 13px;
   color: var(--color-text-secondary);
-  margin: 0;
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.book-meta {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--color-text-secondary);
 }
 </style>
