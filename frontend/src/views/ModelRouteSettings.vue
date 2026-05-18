@@ -151,6 +151,18 @@
                   style="width: 200px"
                 />
               </n-form-item>
+              <n-form-item label="上层大纲注入层级">
+                <n-text depth="3" class="form-hint">
+                  生成低层级纲要时，自动注入上层纲要内容。0=不注入，1=注入上一层（生成节纲注入卷纲，生成章节注入节纲）。
+                </n-text>
+                <n-input-number
+                  v-model:value="settingsStore.outlineInjectionDepth"
+                  :min="0"
+                  :max="3"
+                  :step="1"
+                  style="width: 200px"
+                />
+              </n-form-item>
 
               <n-button
                 type="primary"

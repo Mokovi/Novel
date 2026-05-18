@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from backend.config import DATA_DIR, load_config
 from backend.repositories import chapter_repo
+from backend.models.chapter import Volume
 from backend.services import prompt_builder
 from backend.services.model_router import resolve_api_for_task
 
@@ -344,6 +345,11 @@ def build_prompt_variables(db: Session, chapter_id: int) -> dict:
             variables["previous_chapter_summary"] = "\n".join(parts)
             logger.info("Injected {} previous chapter summaries", len(summaries))
 
+    # Inject parent arc outline (if configured)
+    if gen_config.get("outline_injection_depth", 1) >= 1 and chapter.arc and chapter.arc.outline:
+        variables["chapter_outline"] = chapter.arc.outline
+        logger.info("Injected arc outline for chapter {}", chapter_id)
+
     logger.info(
         "Generated vars: worldview={} chars (level={}), style={} chars, characters={}",
         len(worldview_text), chapter.worldview_level, len(writing_style_text), len(characters),
@@ -494,6 +500,14 @@ def build_arc_prompt_variables(db: Session, arc_id: int) -> dict:
         "writing_style": writing_style_text,
     }
 
+    # Inject parent volume outline (if configured)
+    gen_config = _get_gen_config()
+    if gen_config.get("outline_injection_depth", 1) >= 1 and arc.volume_id:
+        volume = db.get(Volume, arc.volume_id)
+        if volume and volume.outline:
+            variables["volume_outline"] = volume.outline
+            logger.info("Injected volume outline for arc {}", arc_id)
+
     try:
         prompt = prompt_builder.build_prompt(template, variables)
     except ValueError as e:
@@ -549,6 +563,14 @@ def build_volume_prompt_variables(db: Session, volume_id: int) -> dict:
         "worldview": worldview_text,
         "writing_style": writing_style_text,
     }
+
+    # Inject book outline (if configured)
+    gen_config = _get_gen_config()
+    if gen_config.get("outline_injection_depth", 1) >= 1:
+        book_outline_text = load_config().get("book_outline", "")
+        if book_outline_text:
+            variables["book_outline"] = book_outline_text
+            logger.info("Injected book outline for volume {}", volume_id)
 
     try:
         prompt = prompt_builder.build_prompt(template, variables)

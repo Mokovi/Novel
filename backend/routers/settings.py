@@ -11,6 +11,7 @@ router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 class GenerationSettings(BaseModel):
     previous_chapter_count: int = Field(1, ge=0, le=10)
     outline_generation_count: int = Field(1, ge=1, le=5)
+    outline_injection_depth: int = Field(1, ge=0, le=3)
 
 
 @router.get("/generation", response_model=GenerationSettings)
@@ -21,6 +22,7 @@ def get_generation_settings():
     return GenerationSettings(
         previous_chapter_count=gen.get("previous_chapter_count", 1),
         outline_generation_count=gen.get("outline_generation_count", 1),
+        outline_injection_depth=gen.get("outline_injection_depth", 1),
     )
 
 
@@ -31,6 +33,7 @@ def update_generation_settings(body: GenerationSettings):
     cfg["generation"] = {
         "previous_chapter_count": body.previous_chapter_count,
         "outline_generation_count": body.outline_generation_count,
+        "outline_injection_depth": body.outline_injection_depth,
     }
     save_config(cfg)
     return body

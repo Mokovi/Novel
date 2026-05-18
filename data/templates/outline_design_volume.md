@@ -11,6 +11,7 @@ required_variables:
 optional_variables:
   - worldview
   - writing_style
+  - book_outline
 ---
 
 You are a novelist designing the outline for a volume of a long-form novel. Follow the instructions below precisely.
@@ -34,6 +35,12 @@ You are a novelist designing the outline for a volume of a long-form novel. Foll
 
 {{worldview}}
 {{/worldview}}
+
+{{#book_outline}}
+## Book Outline
+
+{{book_outline}}
+{{/book_outline}}
 
 ## Arc Outlines
 

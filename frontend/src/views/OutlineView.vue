@@ -37,7 +37,7 @@
           :autosize="{ minRows: 3, maxRows: 12 }"
           placeholder="全书大纲内容..."
         />
-        <div class="outline-actions">
+        <div v-if="outlineMode.book === 'edit'" class="outline-actions">
           <n-button size="tiny" @click="handleSaveBookOutline">保存</n-button>
         </div>
       </div>
@@ -92,7 +92,7 @@
             :autosize="{ minRows: 2, maxRows: 8 }"
             placeholder="卷纲内容..."
           />
-          <div class="outline-actions">
+          <div v-if="outlineMode[`vol_${vol.id}`] === 'edit'" class="outline-actions">
             <n-button size="tiny" @click="handleSaveVolumeOutline(vol)">保存</n-button>
           </div>
         </div>
@@ -141,7 +141,7 @@
                 :autosize="{ minRows: 2, maxRows: 6 }"
                 placeholder="节纲内容..."
               />
-              <div class="outline-actions">
+              <div v-if="outlineMode[`arc_${arc.id}`] === 'edit'" class="outline-actions">
                 <n-button size="tiny" @click="handleSaveArcOutline(arc)">保存</n-button>
               </div>
             </div>
@@ -380,7 +380,7 @@ const volOutlines = reactive({})
 const arcOutlines = reactive({})
 
 // Outline edit/preview mode
-const outlineMode = reactive({ book: 'edit' })
+const outlineMode = reactive({ book: 'preview' })
 
 function toggleOutlineMode(key) {
   outlineMode[key] = outlineMode[key] === 'preview' ? 'edit' : 'preview'
@@ -646,9 +646,11 @@ onMounted(async () => {
   // Initialize outline displays and store values
   for (const vol of store.volumes) {
     volOutlines[vol.id] = vol.outline || ''
+    outlineMode[`vol_${vol.id}`] = 'preview'
   }
   for (const arc of store.arcs) {
     arcOutlines[arc.id] = arc.outline || ''
+    outlineMode[`arc_${arc.id}`] = 'preview'
   }
 })
 </script>

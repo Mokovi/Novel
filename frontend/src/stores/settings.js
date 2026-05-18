@@ -5,6 +5,7 @@ import { getGenerationSettings, updateGenerationSettings, getBookOutline, update
 export const useSettingsStore = defineStore('settings', () => {
   const previousChapterCount = ref(1)
   const outlineGenerationCount = ref(1)
+  const outlineInjectionDepth = ref(1)
   const bookOutline = ref('')
   const loading = ref(false)
 
@@ -14,6 +15,7 @@ export const useSettingsStore = defineStore('settings', () => {
       const res = await getGenerationSettings()
       previousChapterCount.value = res.data.previous_chapter_count
       outlineGenerationCount.value = res.data.outline_generation_count
+      outlineInjectionDepth.value = res.data.outline_injection_depth
     } catch (e) {
       console.error('Failed to fetch generation settings:', e)
     } finally {
@@ -27,6 +29,7 @@ export const useSettingsStore = defineStore('settings', () => {
       await updateGenerationSettings({
         previous_chapter_count: previousChapterCount.value,
         outline_generation_count: outlineGenerationCount.value,
+        outline_injection_depth: outlineInjectionDepth.value,
       })
     } finally {
       loading.value = false
@@ -53,6 +56,7 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     previousChapterCount,
     outlineGenerationCount,
+    outlineInjectionDepth,
     bookOutline,
     loading,
     fetchGenerationSettings,

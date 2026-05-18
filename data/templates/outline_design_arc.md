@@ -12,6 +12,7 @@ optional_variables:
   - worldview
   - writing_style
   - character_profiles
+  - volume_outline
 ---
 
 You are a novelist designing the outline for a story arc within a long-form novel. Follow the instructions below precisely.
@@ -41,6 +42,12 @@ You are a novelist designing the outline for a story arc within a long-form nove
 
 {{character_profiles}}
 {{/character_profiles}}
+
+{{#volume_outline}}
+## Parent Volume Outline
+
+{{volume_outline}}
+{{/volume_outline}}
 
 ## Existing Chapter Summaries
 
