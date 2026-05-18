@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.repositories import chapter_repo
-from backend.schemas.generate import GenerateRequest
+from backend.schemas.generate import GenerateRequest, OutlineGenerateRequest
 from backend.services.generator import (
     build_arc_prompt_variables,
     build_book_prompt_variables,
@@ -91,12 +91,15 @@ async def regenerate_chapter_summary(
 @router.post("/arc/{arc_id}")
 async def generate_arc_outline(
     arc_id: int,
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
     db: Session = Depends(get_db),
 ):
     """Stream arc outline generation via SSE."""
     ctx = build_arc_prompt_variables(db, arc_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
+    if body.user_prompt:
+        ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
 
     async def _stream_and_save():
         full_content = ""
@@ -144,12 +147,15 @@ async def preview_arc_prompt(
 @router.post("/volume/{volume_id}")
 async def generate_volume_outline(
     volume_id: int,
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
     db: Session = Depends(get_db),
 ):
     """Stream volume outline generation via SSE."""
     ctx = build_volume_prompt_variables(db, volume_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
+    if body.user_prompt:
+        ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
 
     async def _stream_and_save():
         full_content = ""
@@ -195,12 +201,15 @@ async def preview_volume_prompt(
 
 @router.post("/book")
 async def generate_book_outline(
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
     db: Session = Depends(get_db),
 ):
     """Stream book-level outline generation via SSE."""
     ctx = build_book_prompt_variables(db)
     if ctx.get("error"):
         raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.user_prompt:
+        ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
 
     async def _stream_and_save():
         full_content = ""

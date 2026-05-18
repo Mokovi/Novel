@@ -15,14 +15,23 @@
     <div class="book-section">
       <div class="section-header">
         <h2 class="section-title">全书大纲</h2>
-        <n-button
-          size="small"
-          :loading="bookGenerating"
-          @click="handleGenerateBook"
-        >生成全书大纲</n-button>
+        <div class="section-header-actions">
+          <n-button
+            size="tiny"
+            :type="outlineMode.book === 'preview' ? 'primary' : 'default'"
+            @click="toggleOutlineMode('book')"
+          >{{ outlineMode.book === 'preview' ? '编辑' : '预览' }}</n-button>
+          <n-button
+            size="small"
+            :loading="bookGenerating"
+            @click="prepareGenerateBook"
+          >生成全书大纲</n-button>
+        </div>
       </div>
       <div v-if="bookOutline" class="outline-text">
+        <div v-if="outlineMode.book === 'preview'" class="markdown-preview" v-html="renderMarkdown(bookOutline)" />
         <n-input
+          v-else
           v-model:value="bookOutline"
           type="textarea"
           :autosize="{ minRows: 3, maxRows: 12 }"
@@ -52,7 +61,7 @@
             <n-button size="tiny" @click="showVolumeOutline[vol.id] = !showVolumeOutline[vol.id]">
               {{ showVolumeOutline[vol.id] ? '收起' : '卷纲' }}
             </n-button>
-            <n-button size="tiny" :loading="volGenerating[vol.id]" @click="handleGenerateVolume(vol)">
+            <n-button size="tiny" :loading="volGenerating[vol.id]" @click="prepareGenerateVolume(vol)">
               生成卷纲
             </n-button>
             <n-popconfirm @positive-click="handleDeleteVolume(vol.id)">
@@ -68,7 +77,16 @@
 
         <!-- Volume outline fold panel -->
         <div v-if="showVolumeOutline[vol.id]" class="outline-text">
+          <div class="outline-toolbar">
+            <n-button
+              size="tiny"
+              :type="outlineMode[`vol_${vol.id}`] === 'preview' ? 'primary' : 'default'"
+              @click="toggleOutlineMode(`vol_${vol.id}`)"
+            >{{ outlineMode[`vol_${vol.id}`] === 'preview' ? '编辑' : '预览' }}</n-button>
+          </div>
+          <div v-if="outlineMode[`vol_${vol.id}`] === 'preview'" class="markdown-preview" v-html="renderMarkdown(volOutlines[vol.id])" />
           <n-input
+            v-else
             v-model:value="volOutlines[vol.id]"
             type="textarea"
             :autosize="{ minRows: 2, maxRows: 8 }"
@@ -93,7 +111,7 @@
                 <n-button size="tiny" @click="showArcOutline[arc.id] = !showArcOutline[arc.id]">
                   {{ showArcOutline[arc.id] ? '收起' : '节纲' }}
                 </n-button>
-                <n-button size="tiny" :loading="arcGenerating[arc.id]" @click="handleGenerateArc(arc)">
+                <n-button size="tiny" :loading="arcGenerating[arc.id]" @click="prepareGenerateArc(arc)">
                   生成节纲
                 </n-button>
                 <n-popconfirm @positive-click="handleDeleteArc(arc.id)">
@@ -108,7 +126,16 @@
 
             <!-- Arc outline fold panel -->
             <div v-if="showArcOutline[arc.id]" class="outline-text">
+              <div class="outline-toolbar">
+                <n-button
+                  size="tiny"
+                  :type="outlineMode[`arc_${arc.id}`] === 'preview' ? 'primary' : 'default'"
+                  @click="toggleOutlineMode(`arc_${arc.id}`)"
+                >{{ outlineMode[`arc_${arc.id}`] === 'preview' ? '编辑' : '预览' }}</n-button>
+              </div>
+              <div v-if="outlineMode[`arc_${arc.id}`] === 'preview'" class="markdown-preview" v-html="renderMarkdown(arcOutlines[arc.id])" />
               <n-input
+                v-else
                 v-model:value="arcOutlines[arc.id]"
                 type="textarea"
                 :autosize="{ minRows: 2, maxRows: 6 }"
@@ -270,18 +297,44 @@
       </template>
     </n-modal>
 
-    <!-- SSE Generation Output Modal -->
-    <n-modal v-model:show="showGenOutput" :mask-closable="false" style="width: 700px">
+    <!-- ═══ SSE Generation Output Modal ═══ -->
+    <n-modal v-model:show="showGenOutput" :mask-closable="false" style="width: 720px">
       <n-card :title="genTitle" style="max-height: 80vh; overflow-y: auto">
-        <div class="gen-output">
+        <!-- User prompt input (shown when idle) -->
+        <div v-if="genPhase === 'idle'" class="gen-prompt-section">
+          <n-input
+            v-model:value="userPrompt"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 4 }"
+            placeholder="补充提示词（可选）：输入您对本次大纲生成的特定要求..."
+          />
+        </div>
+
+        <!-- Generation output (shown when generating or done) -->
+        <div v-if="genPhase !== 'idle'" class="gen-output">
           <p v-if="genModel" class="gen-meta">模型: {{ genModel }} | 预估: {{ genTokens }} tokens</p>
-          <div class="gen-text">{{ genOutput }}</div>
+
+          <!-- During generation: raw streaming text -->
+          <div v-if="genPhase === 'generating'" class="gen-text">{{ genOutput }}</div>
+
+          <!-- After done: rendered markdown preview -->
+          <div v-else class="gen-preview" v-html="renderMarkdown(genOutput)" />
+
           <n-spin v-if="genRunning" size="small" />
         </div>
+
         <template #action>
           <n-space justify="end">
-            <n-button v-if="genRunning" @click="genAbort?.abort()">取消</n-button>
-            <n-button v-else type="primary" @click="showGenOutput = false">关闭</n-button>
+            <template v-if="genPhase === 'idle'">
+              <n-button @click="showGenOutput = false">取消</n-button>
+              <n-button type="primary" @click="startGen">开始生成</n-button>
+            </template>
+            <template v-else-if="genPhase === 'generating'">
+              <n-button @click="genAbort?.abort()">取消</n-button>
+            </template>
+            <template v-else>
+              <n-button type="primary" @click="showGenOutput = false">关闭</n-button>
+            </template>
           </n-space>
         </template>
       </n-card>
@@ -290,9 +343,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, reactive } from 'vue'
+import { ref, onMounted, computed, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
+import { marked } from 'marked'
 import { useChaptersStore } from '../stores/chapters.js'
 import { useSettingsStore } from '../stores/settings.js'
 import {
@@ -325,10 +379,17 @@ const showArcOutline = reactive({})
 const volOutlines = reactive({})
 const arcOutlines = reactive({})
 
+// Outline edit/preview mode
+const outlineMode = reactive({ book: 'edit' })
+
+function toggleOutlineMode(key) {
+  outlineMode[key] = outlineMode[key] === 'preview' ? 'edit' : 'preview'
+}
+
 // Book outline
 const bookOutline = ref('')
 
-// Generation state
+// ── Generation modal state ────────────────────────────────
 const showGenOutput = ref(false)
 const genTitle = ref('')
 const genOutput = ref('')
@@ -336,6 +397,12 @@ const genModel = ref('')
 const genTokens = ref(0)
 const genRunning = ref(false)
 const genAbort = ref(null)
+const genPhase = ref('idle') // 'idle' | 'generating' | 'done'
+const userPrompt = ref('')
+
+// Store the generation function to call when user clicks "开始生成"
+let pendingGenStart = null
+
 const bookGenerating = ref(false)
 const volGenerating = reactive({})
 const arcGenerating = reactive({})
@@ -369,6 +436,15 @@ const statusType = (s) =>
 const statusLabel = (s) =>
   ({ pending: '待生成', generating: '生成中', completed: '已完成' }[s] || s)
 
+function renderMarkdown(text) {
+  if (!text) return ''
+  try {
+    return marked.parse(text)
+  } catch {
+    return text
+  }
+}
+
 function onVolumeChange(volId) {
   newChapter.value.arc_id = null
 }
@@ -378,9 +454,49 @@ function openGenModal(title) {
   genOutput.value = ''
   genModel.value = ''
   genTokens.value = 0
-  genRunning.value = true
+  genRunning.value = false
+  genPhase.value = 'idle'
+  userPrompt.value = ''
   showGenOutput.value = true
 }
+
+function startGen() {
+  if (!pendingGenStart) return
+  genPhase.value = 'generating'
+  genRunning.value = true
+  pendingGenStart(userPrompt.value)
+}
+
+async function runOutlineSSE(label, urlFn, onContentDone) {
+  openGenModal(label)
+  pendingGenStart = (prompt) => {
+    genAbort.value = urlFn({
+      onStart: (evt) => {
+        genModel.value = evt.model || ''
+        genTokens.value = evt.token_estimate || 0
+      },
+      onToken: (token) => {
+        genOutput.value += token
+      },
+      onDone: (evt) => {
+        genRunning.value = false
+        genPhase.value = 'done'
+        const content = evt?.content || genOutput.value
+        if (onContentDone && content) {
+          onContentDone(content)
+        }
+        message.success(`${label} 生成完成`)
+      },
+      onError: (err) => {
+        genRunning.value = false
+        genPhase.value = 'done'
+        message.error(err)
+      },
+    }, { user_prompt: prompt })
+  }
+}
+
+// ── Handlers ──────────────────────────────────────────────
 
 async function handleCreateVolume() {
   await createVolume(newVolume.value)
@@ -467,53 +583,36 @@ async function handleBatchDownload() {
 
 // ── Outline generation ────────────────────────────────────
 
-async function runOutlineSSE(label, urlFn) {
-  openGenModal(label)
-  genAbort.value = urlFn({
-    onStart: (evt) => {
-      genModel.value = evt.model || ''
-      genTokens.value = evt.token_estimate || 0
-    },
-    onToken: (token) => {
-      genOutput.value += token
-    },
-    onDone: () => {
-      genRunning.value = false
-      message.success(`${label} 生成完成`)
-    },
-    onError: (err) => {
-      genRunning.value = false
-      message.error(err)
-    },
+function prepareGenerateBook() {
+  bookGenerating.value = true
+  runOutlineSSE('全书大纲', (handlers) => generateBookOutline(handlers), (content) => {
+    bookOutline.value = content
   })
 }
 
-async function handleGenerateBook() {
-  bookGenerating.value = true
-  try {
-    await runOutlineSSE('全书大纲', (handlers) => generateBookOutline(handlers))
-  } finally {
-    bookGenerating.value = false
-  }
-}
-
-async function handleGenerateVolume(vol) {
+function prepareGenerateVolume(vol) {
   volGenerating[vol.id] = true
-  try {
-    await runOutlineSSE(`卷纲: ${vol.title}`, (handlers) => generateVolumeOutline(vol.id, handlers))
-  } finally {
-    volGenerating[vol.id] = false
-  }
+  runOutlineSSE(`卷纲: ${vol.title}`, (handlers) => generateVolumeOutline(vol.id, handlers), (content) => {
+    volOutlines[vol.id] = content
+  })
 }
 
-async function handleGenerateArc(arc) {
+function prepareGenerateArc(arc) {
   arcGenerating[arc.id] = true
-  try {
-    await runOutlineSSE(`节纲: ${arc.title}`, (handlers) => generateArcOutline(arc.id, handlers))
-  } finally {
-    arcGenerating[arc.id] = false
-  }
+  runOutlineSSE(`节纲: ${arc.title}`, (handlers) => generateArcOutline(arc.id, handlers), (content) => {
+    arcOutlines[arc.id] = content
+  })
 }
+
+// Reset loading states when modal closes
+watch(showGenOutput, (val) => {
+  if (!val) {
+    bookGenerating.value = false
+    // clear all vol/arc generating states
+    for (const k of Object.keys(volGenerating)) volGenerating[k] = false
+    for (const k of Object.keys(arcGenerating)) arcGenerating[k] = false
+  }
+})
 
 // ── Save outlines ─────────────────────────────────────────
 
@@ -556,7 +655,7 @@ onMounted(async () => {
 
 <style scoped>
 .outline {
-  max-width: 860px;
+  max-width: 960px;
   margin: 0 auto;
 }
 
@@ -593,6 +692,12 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .section-title {
@@ -652,6 +757,12 @@ onMounted(async () => {
   margin: 8px 0 12px;
 }
 
+.outline-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
 .outline-actions {
   margin-top: 6px;
 }
@@ -660,6 +771,104 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--color-text-muted);
   margin: 0;
+}
+
+/* Markdown preview */
+.markdown-preview {
+  padding: 12px 16px;
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text-primary);
+  overflow-x: auto;
+}
+
+.markdown-preview :deep(h1),
+.markdown-preview :deep(h2),
+.markdown-preview :deep(h3),
+.markdown-preview :deep(h4) {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+  color: var(--color-accent-dark);
+}
+
+.markdown-preview :deep(h1) { font-size: 1.4em; }
+.markdown-preview :deep(h2) { font-size: 1.2em; }
+.markdown-preview :deep(h3) { font-size: 1.1em; }
+
+.markdown-preview :deep(p) {
+  margin: 0 0 0.6em;
+}
+
+.markdown-preview :deep(ul),
+.markdown-preview :deep(ol) {
+  padding-left: 1.5em;
+  margin: 0.4em 0;
+}
+
+.markdown-preview :deep(li) {
+  margin: 0.2em 0;
+}
+
+.markdown-preview :deep(strong) {
+  font-weight: 600;
+}
+
+.markdown-preview :deep(code) {
+  background: rgba(201, 169, 78, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.9em;
+}
+
+.markdown-preview :deep(pre) {
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.markdown-preview :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.markdown-preview :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1em 0;
+}
+
+.markdown-preview :deep(blockquote) {
+  border-left: 3px solid var(--color-accent);
+  margin: 0.5em 0;
+  padding: 4px 12px;
+  color: var(--color-text-secondary);
+  background: rgba(201, 169, 78, 0.04);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.markdown-preview :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.markdown-preview :deep(th),
+.markdown-preview :deep(td) {
+  border: 1px solid var(--color-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.markdown-preview :deep(th) {
+  background: var(--color-bg-page);
+  font-weight: 600;
 }
 
 /* Arc */
@@ -818,9 +1027,15 @@ onMounted(async () => {
   margin-top: 60px;
 }
 
-/* Generation output */
+/* Generation modal */
+.gen-prompt-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
 .gen-output {
-  min-height: 200px;
+  min-height: 150px;
 }
 
 .gen-meta {
@@ -834,5 +1049,65 @@ onMounted(async () => {
   font-size: 14px;
   line-height: 1.6;
   color: var(--color-text-primary);
+}
+
+.gen-preview {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text-primary);
+}
+
+.gen-preview :deep(h1),
+.gen-preview :deep(h2),
+.gen-preview :deep(h3),
+.gen-preview :deep(h4) {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+  color: var(--color-accent-dark);
+}
+
+.gen-preview :deep(h1) { font-size: 1.4em; }
+.gen-preview :deep(h2) { font-size: 1.2em; }
+.gen-preview :deep(h3) { font-size: 1.1em; }
+
+.gen-preview :deep(p) {
+  margin: 0 0 0.6em;
+}
+
+.gen-preview :deep(ul),
+.gen-preview :deep(ol) {
+  padding-left: 1.5em;
+  margin: 0.4em 0;
+}
+
+.gen-preview :deep(li) {
+  margin: 0.2em 0;
+}
+
+.gen-preview :deep(strong) {
+  font-weight: 600;
+}
+
+.gen-preview :deep(code) {
+  background: rgba(201, 169, 78, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.9em;
+}
+
+.gen-preview :deep(pre) {
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.gen-preview :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1em 0;
 }
 </style>

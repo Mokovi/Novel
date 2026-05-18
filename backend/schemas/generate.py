@@ -12,6 +12,12 @@ class GenerateRequest(BaseModel):
     max_tokens: Optional[int] = None
 
 
+class OutlineGenerateRequest(BaseModel):
+    """Request body for outline generation with optional user prompt."""
+
+    user_prompt: Optional[str] = None
+
+
 class GenerateProgress(BaseModel):
     """SSE payload sent per chunk during streaming."""
 
