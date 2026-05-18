@@ -20,6 +20,13 @@ def load_config() -> dict:
     return {}
 
 
+def save_config(config: dict) -> None:
+    """Write the full config dict back to config.json."""
+    config_path = DATA_DIR / "config.json"
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+
+
 def get_env(key: str, default: str | None = None) -> str | None:
     return os.getenv(key, default)
 

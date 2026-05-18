@@ -134,6 +134,83 @@ def get_chapter_characters(db: Session, chapter_id: int) -> list:
     return [cc.character for cc in chapter.character_associations]
 
 
+def save_chapter_ai_summary(db: Session, chapter_id: int, ai_summary: str) -> bool:
+    """Update a chapter's ai_summary field. Returns True if found, False otherwise."""
+    chapter = db.get(Chapter, chapter_id)
+    if not chapter:
+        return False
+    chapter.ai_summary = ai_summary
+    db.commit()
+    return True
+
+
+def get_previous_chapter_summaries(
+    db: Session, chapter_id: int, count: int
+) -> list[str]:
+    """Get AI summaries from the previous *count* chapters (same volume, earlier sort_order)."""
+    chapter = db.get(Chapter, chapter_id)
+    if not chapter:
+        return []
+
+    summaries = (
+        db.query(Chapter.ai_summary)
+        .filter(
+            Chapter.volume_id == chapter.volume_id,
+            Chapter.sort_order < chapter.sort_order,
+            Chapter.ai_summary.isnot(None),
+            Chapter.ai_summary != "",
+        )
+        .order_by(Chapter.sort_order.desc())
+        .limit(count)
+        .all()
+    )
+    # Reverse to get chronological order
+    return [s[0] for s in reversed(summaries)]
+
+
+def create_chapters_batch(
+    db: Session, base_chapter: Chapter, segments: list[str]
+) -> list[Chapter]:
+    """Create new chapters for segments[1:] after base_chapter, bumping subsequent sort_orders.
+
+    The first segment is written into *base_chapter* directly.
+    Segments after that get new chapter rows with titles like "原题（续N）".
+    Returns the list of newly created chapters.
+    """
+    if len(segments) <= 1:
+        return []
+
+    # Shift subsequent chapters' sort_order up to make room
+    new_chapter_count = len(segments) - 1
+    db.query(Chapter).filter(
+        Chapter.volume_id == base_chapter.volume_id,
+        Chapter.sort_order > base_chapter.sort_order,
+    ).update(
+        {Chapter.sort_order: Chapter.sort_order + new_chapter_count},
+        synchronize_session=False,
+    )
+
+    new_chapters = []
+    for i, segment in enumerate(segments[1:], start=1):
+        word_count = len(segment)
+        ch = Chapter(
+            volume_id=base_chapter.volume_id,
+            title=f"{base_chapter.title}（续{i}）",
+            content=segment,
+            word_count=word_count,
+            status="completed",
+            sort_order=base_chapter.sort_order + i,
+        )
+        db.add(ch)
+        db.flush()
+        new_chapters.append(ch)
+
+    db.commit()
+    for ch in new_chapters:
+        db.refresh(ch)
+    return new_chapters
+
+
 def set_chapter_characters(db: Session, chapter_id: int, character_ids: list[int]) -> list:
     """Replace all character associations for a chapter. Returns the new list of characters."""
     chapter = db.get(Chapter, chapter_id)

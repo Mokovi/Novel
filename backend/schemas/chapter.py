@@ -33,6 +33,7 @@ class ChapterCreate(BaseModel):
 class ChapterUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=255)
     summary: Optional[str] = None
+    ai_summary: Optional[str] = None
     content: Optional[str] = None
     worldview_level: Optional[str] = Field(None, pattern=r"^(high|medium|low)$")
 
@@ -42,6 +43,7 @@ class ChapterResponse(BaseModel):
     volume_id: int
     title: str
     summary: Optional[str] = None
+    ai_summary: Optional[str] = None
     content: Optional[str] = None
     word_count: int
     status: str

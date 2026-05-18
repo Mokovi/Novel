@@ -8,7 +8,7 @@ import httpx
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from backend.config import DATA_DIR
+from backend.config import DATA_DIR, load_config
 from backend.repositories import chapter_repo
 from backend.services import prompt_builder
 from backend.services.model_router import resolve_api_for_task
@@ -40,7 +40,6 @@ def _filter_worldview(worldview: dict, level: str) -> str:
         return json.dumps(worldview, ensure_ascii=False, indent=2)
 
     if level == "low":
-        # Only the background section
         filtered = {"背景": worldview.get("背景", {})}
         return json.dumps(filtered, ensure_ascii=False, indent=2)
 
@@ -81,6 +80,16 @@ def _format_character_profiles(characters: list) -> str:
             lines.append(f"目标：{c.goals}")
         parts.append("\n".join(lines))
     return "\n\n".join(parts)
+
+
+def _get_gen_config() -> dict:
+    """Read the 'generation' section from config.json with defaults."""
+    cfg = load_config()
+    gen = cfg.get("generation", {})
+    return {
+        "previous_chapter_count": gen.get("previous_chapter_count", 1),
+        "auto_split_target_words": gen.get("auto_split_target_words", 2000),
+    }
 
 
 # ── Streaming helpers ──────────────────────────────────────
@@ -185,6 +194,142 @@ async def _stream_anthropic(
                     continue
 
 
+# ── Non-streaming (sync) API helpers ───────────────────────
+
+
+async def _call_openai_sync(route_config: dict, prompt: str) -> str:
+    """Non-streaming OpenAI-compatible chat completions call. Returns full response text."""
+    base_url = (
+        route_config.get("api_base_url")
+        or _DEFAULT_API_BASES.get(route_config.get("provider", ""), "")
+    ).rstrip("/")
+    url = f"{base_url}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {route_config['api_key']}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": route_config.get("model_name", "gpt-4o-mini"),
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": route_config.get("max_tokens") or 4096,
+    }
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        resp = await client.post(url, json=body, headers=headers)
+        if not resp.is_success:
+            raise RuntimeError(
+                f"LLM API error (HTTP {resp.status_code}): {resp.text[:300]}"
+            )
+        data = resp.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+
+async def _call_anthropic_sync(route_config: dict, prompt: str) -> str:
+    """Non-streaming Anthropic Messages API call. Returns full response text."""
+    base_url = (
+        route_config.get("api_base_url")
+        or _DEFAULT_API_BASES.get("anthropic", "")
+    ).rstrip("/")
+    url = f"{base_url}/v1/messages"
+    headers = {
+        "x-api-key": route_config["api_key"],
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": route_config.get("model_name", "claude-3-haiku-20240307"),
+        "max_tokens": route_config.get("max_tokens") or 4096,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        resp = await client.post(url, json=body, headers=headers)
+        if not resp.is_success:
+            raise RuntimeError(
+                f"Anthropic API error (HTTP {resp.status_code}): {resp.text[:300]}"
+            )
+        data = resp.json()
+        content_blocks = data.get("content", [])
+        return "".join(b.get("text", "") for b in content_blocks)
+
+
+# ── AI Summary generation ──────────────────────────────────
+
+
+async def generate_ai_summary(
+    db: Session, content: str, title: str, author_summary: str = ""
+) -> str:
+    """Call the LLM (non-streaming) to generate a 150-300 character Chinese summary.
+
+    Returns the summary string, or "" on failure.
+    """
+    route_config = resolve_api_for_task(db, "chapter_writing")
+    if not route_config or not route_config.get("api_key"):
+        logger.warning("Cannot generate AI summary: no route config for chapter_writing")
+        return ""
+
+    prompt_parts = [
+        "请用中文为以下小说章节写一段简洁的摘要（150-300字），只写摘要本身，不要额外说明。",
+    ]
+    if author_summary:
+        prompt_parts.append(f"\n作者摘要：{author_summary}")
+    prompt_parts.append(f"\n章节标题：{title}")
+    prompt_parts.append(f"\n章节内容：\n{content[:3000]}")
+
+    prompt = "\n".join(prompt_parts)
+
+    try:
+        provider = route_config.get("provider", "openai")
+        if provider == "anthropic":
+            result = await _call_anthropic_sync(route_config, prompt)
+        else:
+            result = await _call_openai_sync(route_config, prompt)
+        logger.info("AI summary generated for '{}': {} chars", title, len(result))
+        return result.strip()
+    except Exception as e:
+        logger.error("Failed to generate AI summary for '{}': {}", title, e)
+        return ""
+
+
+# ── Content splitting ──────────────────────────────────────
+
+
+def split_content_into_segments(content: str, target_words: int) -> list[str]:
+    """Split content at paragraph boundaries, targeting *target_words* per segment.
+
+    Splits on ``\\n\\n``. Tries to keep each segment close to target_words
+    without truncating individual paragraphs.
+    """
+    paragraphs = content.split("\n\n")
+    if not paragraphs:
+        return [content]
+
+    segments = []
+    current = []
+    current_len = 0
+
+    for para in paragraphs:
+        para_len = len(para)
+        if current_len > 0 and current_len + para_len > target_words * 1.4:
+            segments.append("\n\n".join(current))
+            current = [para]
+            current_len = para_len
+        else:
+            current.append(para)
+            current_len += para_len
+
+    if current:
+        segments.append("\n\n".join(current))
+
+    # If only one segment, return as-is
+    if len(segments) <= 1:
+        return [content]
+
+    logger.info(
+        "Split {} chars into {} segments (target={} words/segment)",
+        len(content), len(segments), target_words,
+    )
+    return segments
+
+
 # ── Prompt variable assembly ────────────────────────────────
 
 
@@ -227,6 +372,18 @@ def build_prompt_variables(db: Session, chapter_id: int) -> dict:
         "writing_style": writing_style_text,
         "character_profiles": character_profiles,
     }
+
+    # Inject previous chapter AI summaries
+    gen_config = _get_gen_config()
+    prev_count = gen_config["previous_chapter_count"]
+    if prev_count > 0:
+        summaries = chapter_repo.get_previous_chapter_summaries(db, chapter_id, prev_count)
+        if summaries:
+            parts = []
+            for i, s in enumerate(summaries, 1):
+                parts.append(f"前{i}章摘要：{s}")
+            variables["previous_chapter_summary"] = "\n".join(parts)
+            logger.info("Injected {} previous chapter summaries", len(summaries))
 
     logger.info(
         "Generated vars: worldview={} chars (level={}), style={} chars, characters={}",
@@ -319,4 +476,113 @@ async def generate_chapter_stream(
         yield _sse_event("error", {"message": f"Save failed: {e}"})
         return
 
+    # 8. Generate AI summary
+    chapter = chapter_repo.get_chapter(db, chapter_id)
+    if chapter:
+        ai_summary = await generate_ai_summary(
+            db, full_content, chapter.title or "", chapter.summary or "",
+        )
+        if ai_summary:
+            chapter_repo.save_chapter_ai_summary(db, chapter_id, ai_summary)
+            yield _sse_event("summary", {"summary": ai_summary})
+
     yield _sse_event("done", {"word_count": word_count, "model": model_name})
+
+
+async def generate_unlimited_stream(
+    db: Session,
+    chapter_id: int,
+    temperature: Optional[float] = None,
+) -> AsyncGenerator[str, None]:
+    """Unlimited generation: stream content, then auto-split into chapters.
+
+    SSE events: start, token, splitting, summary, done, error
+    """
+    # Assemble prompt
+    ctx = build_prompt_variables(db, chapter_id)
+    if ctx.get("error"):
+        yield _sse_event("error", {"message": ctx["error"]})
+        return
+
+    # Append unlimited generation instruction
+    unlimited_prompt = ctx["prompt"] + (
+        "\n\n请连续撰写多个章节的内容，不要停滞，保持连贯叙事。"
+        "每个章节之间用空行分隔的'---'作为分节符。"
+        "\n\n请在内容中自然地在合适的位置插入分隔符 '\\n\\n---\\n\\n' 来标记章节边界。"
+    )
+
+    route_config = ctx["route_config"]
+    model_name = ctx["model_name"]
+    token_estimate = ctx["token_estimate"]
+    provider = route_config.get("provider", "openai")
+
+    yield _sse_event("start", {"model": model_name, "token_estimate": token_estimate, "unlimited": True})
+
+    collected_tokens: list[str] = []
+    try:
+        if provider == "anthropic":
+            stream = _stream_anthropic(route_config, unlimited_prompt, temperature, None)
+        else:
+            stream = _stream_openai(route_config, unlimited_prompt, temperature, None)
+
+        async for token in stream:
+            collected_tokens.append(token)
+            yield _sse_event("token", {"token": token})
+    except Exception as e:
+        logger.error("Unlimited generation failed for chapter {}: {}", chapter_id, e)
+        yield _sse_event("error", {"message": str(e)})
+        return
+
+    full_content = "".join(collected_tokens).strip()
+
+    # Split content by explicit separators first, then by word count
+    gen_config = _get_gen_config()
+    target_words = gen_config["auto_split_target_words"]
+
+    if "\n\n---\n\n" in full_content:
+        segments = [s.strip() for s in full_content.split("\n\n---\n\n") if s.strip()]
+    else:
+        segments = split_content_into_segments(full_content, target_words)
+
+    yield _sse_event("splitting", {"segment_count": len(segments)})
+
+    # Save first segment to current chapter
+    first_segment = segments[0]
+    first_word_count = len(first_segment)
+    try:
+        chapter_repo.save_generated_content(
+            db, chapter_id, first_segment, first_word_count, ctx["prompt"], model_name,
+        )
+    except Exception as e:
+        logger.error("Failed to save first segment for chapter {}: {}", chapter_id, e)
+        yield _sse_event("error", {"message": f"Save failed: {e}"})
+        return
+
+    # Create new chapters for remaining segments
+    new_chapter_ids = []
+    if len(segments) > 1:
+        chapter = chapter_repo.get_chapter(db, chapter_id)
+        if chapter:
+            try:
+                new_chapters = chapter_repo.create_chapters_batch(db, chapter, segments)
+                new_chapter_ids = [ch.id for ch in new_chapters]
+            except Exception as e:
+                logger.error("Failed to create batch chapters: {}", e)
+                yield _sse_event("error", {"message": f"Batch create failed: {e}"})
+                return
+
+    # Generate ONE AI summary for the entire original content
+    chapter = chapter_repo.get_chapter(db, chapter_id)
+    if chapter:
+        ai_summary = await generate_ai_summary(
+            db, full_content, chapter.title or "", chapter.summary or "",
+        )
+        if ai_summary:
+            chapter_repo.save_chapter_ai_summary(db, chapter_id, ai_summary)
+            yield _sse_event("summary", {"summary": ai_summary})
+
+    yield _sse_event("done", {
+        "word_count": len(full_content),
+        "model": model_name,
+        "new_chapter_ids": new_chapter_ids,
+    })
