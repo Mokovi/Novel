@@ -109,13 +109,8 @@ const menuOptions = [
     icon: () => h(TemplateIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
   },
   {
-    label: 'API 配置',
+    label: '设置',
     key: 'settings',
-    icon: () => h(SettingsIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
-  },
-  {
-    label: '系统设置',
-    key: 'system-settings',
     icon: () => h(SettingsIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
   },
 ]

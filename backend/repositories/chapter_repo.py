@@ -168,48 +168,6 @@ def get_previous_chapter_summaries(
     return [s[0] for s in reversed(summaries)]
 
 
-def create_chapters_batch(
-    db: Session, base_chapter: Chapter, segments: list[str]
-) -> list[Chapter]:
-    """Create new chapters for segments[1:] after base_chapter, bumping subsequent sort_orders.
-
-    The first segment is written into *base_chapter* directly.
-    Segments after that get new chapter rows with titles like "原题（续N）".
-    Returns the list of newly created chapters.
-    """
-    if len(segments) <= 1:
-        return []
-
-    # Shift subsequent chapters' sort_order up to make room
-    new_chapter_count = len(segments) - 1
-    db.query(Chapter).filter(
-        Chapter.volume_id == base_chapter.volume_id,
-        Chapter.sort_order > base_chapter.sort_order,
-    ).update(
-        {Chapter.sort_order: Chapter.sort_order + new_chapter_count},
-        synchronize_session=False,
-    )
-
-    new_chapters = []
-    for i, segment in enumerate(segments[1:], start=1):
-        word_count = len(segment)
-        ch = Chapter(
-            volume_id=base_chapter.volume_id,
-            title=f"{base_chapter.title}（续{i}）",
-            content=segment,
-            word_count=word_count,
-            status="completed",
-            sort_order=base_chapter.sort_order + i,
-        )
-        db.add(ch)
-        db.flush()
-        new_chapters.append(ch)
-
-    db.commit()
-    for ch in new_chapters:
-        db.refresh(ch)
-    return new_chapters
-
 
 def set_chapter_characters(db: Session, chapter_id: int, character_ids: list[int]) -> list:
     """Replace all character associations for a chapter. Returns the new list of characters."""

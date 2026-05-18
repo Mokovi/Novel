@@ -1,7 +1,7 @@
 <template>
   <div class="settings-page">
-    <h1 class="page-title">模型路由配置</h1>
-    <p class="page-desc">管理模型 API、方案和功能绑定。</p>
+    <h1 class="page-title">设置</h1>
+    <p class="page-desc">管理模型 API、方案、功能绑定和生成参数。</p>
 
     <n-tabs v-model:value="activeTab" type="line">
       <!-- Tab 1: Model APIs -->
@@ -121,6 +121,36 @@
           </div>
         </div>
       </n-tab-pane>
+
+      <!-- Tab 4: Generation Settings -->
+      <n-tab-pane name="generation" tab="生成设置">
+        <div class="tab-content">
+          <n-card title="生成参数" class="settings-card">
+            <n-space vertical :size="16">
+              <n-form-item label="注入前文章节摘要数量">
+                <n-text depth="3" class="form-hint">
+                  下一章生成时，会在提示词中注入前 N 章的 AI 摘要作为上下文参考。
+                </n-text>
+                <n-input-number
+                  v-model:value="settingsStore.previousChapterCount"
+                  :min="0"
+                  :max="10"
+                  :step="1"
+                  style="width: 200px"
+                />
+              </n-form-item>
+
+              <n-button
+                type="primary"
+                :loading="settingsStore.loading"
+                @click="handleSaveGenSettings"
+              >
+                保存设置
+              </n-button>
+            </n-space>
+          </n-card>
+        </div>
+      </n-tab-pane>
     </n-tabs>
 
     <!-- API Modal -->
@@ -189,8 +219,10 @@ import { useMessage } from 'naive-ui'
 import { listModelApis, createModelApi, updateModelApi, deleteModelApi, testModelApi } from '../api/model-apis.js'
 import { listPlans, createPlan, updatePlan, deletePlan } from '../api/plans.js'
 import { listTaskBindings, updateTaskBinding, deleteTaskBinding } from '../api/task-bindings.js'
+import { useSettingsStore } from '../stores/settings.js'
 
 const message = useMessage()
+const settingsStore = useSettingsStore()
 
 const activeTab = ref('apis')
 const apis = ref([])
@@ -217,11 +249,17 @@ onMounted(async () => {
     listModelApis().catch(() => ({ data: [] })),
     listPlans().catch(() => ({ data: [] })),
     listTaskBindings().catch(() => ({ data: [] })),
+    settingsStore.fetchGenerationSettings(),
   ])
   apis.value = a.data
   plans.value = p.data
   bindings.value = b.data
 })
+
+async function handleSaveGenSettings() {
+  await settingsStore.saveGenerationSettings()
+  message.success('设置已保存')
+}
 
 const transferOptions = computed(() =>
   apis.value.map(a => ({ label: `${a.name} (${a.model_name})`, value: a.id, disabled: !a.enabled }))
@@ -554,5 +592,14 @@ function getBindingPlanId(taskKey) {
 
 .empty-state {
   margin-top: 40px;
+}
+
+.settings-card {
+  max-width: 500px;
+}
+
+.form-hint {
+  display: block;
+  margin-bottom: 6px;
 }
 </style>

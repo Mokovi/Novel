@@ -88,7 +88,6 @@ def _get_gen_config() -> dict:
     gen = cfg.get("generation", {})
     return {
         "previous_chapter_count": gen.get("previous_chapter_count", 1),
-        "auto_split_target_words": gen.get("auto_split_target_words", 2000),
     }
 
 
@@ -289,47 +288,6 @@ async def generate_ai_summary(
         return ""
 
 
-# ── Content splitting ──────────────────────────────────────
-
-
-def split_content_into_segments(content: str, target_words: int) -> list[str]:
-    """Split content at paragraph boundaries, targeting *target_words* per segment.
-
-    Splits on ``\\n\\n``. Tries to keep each segment close to target_words
-    without truncating individual paragraphs.
-    """
-    paragraphs = content.split("\n\n")
-    if not paragraphs:
-        return [content]
-
-    segments = []
-    current = []
-    current_len = 0
-
-    for para in paragraphs:
-        para_len = len(para)
-        if current_len > 0 and current_len + para_len > target_words * 1.4:
-            segments.append("\n\n".join(current))
-            current = [para]
-            current_len = para_len
-        else:
-            current.append(para)
-            current_len += para_len
-
-    if current:
-        segments.append("\n\n".join(current))
-
-    # If only one segment, return as-is
-    if len(segments) <= 1:
-        return [content]
-
-    logger.info(
-        "Split {} chars into {} segments (target={} words/segment)",
-        len(content), len(segments), target_words,
-    )
-    return segments
-
-
 # ── Prompt variable assembly ────────────────────────────────
 
 
@@ -489,100 +447,3 @@ async def generate_chapter_stream(
     yield _sse_event("done", {"word_count": word_count, "model": model_name})
 
 
-async def generate_unlimited_stream(
-    db: Session,
-    chapter_id: int,
-    temperature: Optional[float] = None,
-) -> AsyncGenerator[str, None]:
-    """Unlimited generation: stream content, then auto-split into chapters.
-
-    SSE events: start, token, splitting, summary, done, error
-    """
-    # Assemble prompt
-    ctx = build_prompt_variables(db, chapter_id)
-    if ctx.get("error"):
-        yield _sse_event("error", {"message": ctx["error"]})
-        return
-
-    # Append unlimited generation instruction
-    unlimited_prompt = ctx["prompt"] + (
-        "\n\n请连续撰写多个章节的内容，不要停滞，保持连贯叙事。"
-        "每个章节之间用空行分隔的'---'作为分节符。"
-        "\n\n请在内容中自然地在合适的位置插入分隔符 '\\n\\n---\\n\\n' 来标记章节边界。"
-    )
-
-    route_config = ctx["route_config"]
-    model_name = ctx["model_name"]
-    token_estimate = ctx["token_estimate"]
-    provider = route_config.get("provider", "openai")
-
-    yield _sse_event("start", {"model": model_name, "token_estimate": token_estimate, "unlimited": True})
-
-    collected_tokens: list[str] = []
-    try:
-        if provider == "anthropic":
-            stream = _stream_anthropic(route_config, unlimited_prompt, temperature, None)
-        else:
-            stream = _stream_openai(route_config, unlimited_prompt, temperature, None)
-
-        async for token in stream:
-            collected_tokens.append(token)
-            yield _sse_event("token", {"token": token})
-    except Exception as e:
-        logger.error("Unlimited generation failed for chapter {}: {}", chapter_id, e)
-        yield _sse_event("error", {"message": str(e)})
-        return
-
-    full_content = "".join(collected_tokens).strip()
-
-    # Split content by explicit separators first, then by word count
-    gen_config = _get_gen_config()
-    target_words = gen_config["auto_split_target_words"]
-
-    if "\n\n---\n\n" in full_content:
-        segments = [s.strip() for s in full_content.split("\n\n---\n\n") if s.strip()]
-    else:
-        segments = split_content_into_segments(full_content, target_words)
-
-    yield _sse_event("splitting", {"segment_count": len(segments)})
-
-    # Save first segment to current chapter
-    first_segment = segments[0]
-    first_word_count = len(first_segment)
-    try:
-        chapter_repo.save_generated_content(
-            db, chapter_id, first_segment, first_word_count, ctx["prompt"], model_name,
-        )
-    except Exception as e:
-        logger.error("Failed to save first segment for chapter {}: {}", chapter_id, e)
-        yield _sse_event("error", {"message": f"Save failed: {e}"})
-        return
-
-    # Create new chapters for remaining segments
-    new_chapter_ids = []
-    if len(segments) > 1:
-        chapter = chapter_repo.get_chapter(db, chapter_id)
-        if chapter:
-            try:
-                new_chapters = chapter_repo.create_chapters_batch(db, chapter, segments)
-                new_chapter_ids = [ch.id for ch in new_chapters]
-            except Exception as e:
-                logger.error("Failed to create batch chapters: {}", e)
-                yield _sse_event("error", {"message": f"Batch create failed: {e}"})
-                return
-
-    # Generate ONE AI summary for the entire original content
-    chapter = chapter_repo.get_chapter(db, chapter_id)
-    if chapter:
-        ai_summary = await generate_ai_summary(
-            db, full_content, chapter.title or "", chapter.summary or "",
-        )
-        if ai_summary:
-            chapter_repo.save_chapter_ai_summary(db, chapter_id, ai_summary)
-            yield _sse_event("summary", {"summary": ai_summary})
-
-    yield _sse_event("done", {
-        "word_count": len(full_content),
-        "model": model_name,
-        "new_chapter_ids": new_chapter_ids,
-    })

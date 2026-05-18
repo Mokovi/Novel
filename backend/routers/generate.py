@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.schemas.generate import GenerateRequest
-from backend.services.generator import build_prompt_variables, generate_chapter_stream, generate_unlimited_stream
+from backend.services.generator import build_prompt_variables, generate_chapter_stream
 
 router = APIRouter(prefix="/api/v1/generate", tags=["generate"])
 
@@ -52,23 +52,3 @@ async def preview_chapter_prompt(
         "template_name": ctx["template_name"],
     }
 
-
-@router.post("/unlimited/{chapter_id}")
-async def generate_unlimited(
-    chapter_id: int,
-    body: GenerateRequest = GenerateRequest(),
-    db: Session = Depends(get_db),
-):
-    """Stream unlimited chapter generation with auto-split via SSE.
-
-    SSE events: start (with unlimited:true), token, splitting (segment_count),
-    summary, done (word_count, new_chapter_ids), error
-    """
-    return StreamingResponse(
-        generate_unlimited_stream(db, chapter_id, body.temperature),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )

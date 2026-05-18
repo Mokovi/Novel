@@ -138,16 +138,6 @@
               {{ generating ? '生成中...' : store.currentChapter.content ? '重新生成' : 'AI 生成' }}
             </n-button>
             <n-button
-              size="small"
-              block
-              secondary
-              :disabled="generatingUnlimited"
-              @click="handleGenerateUnlimited"
-              class="unlimited-btn"
-            >
-              {{ generatingUnlimited ? '无限生成中...' : '无限生成 (自动分章)' }}
-            </n-button>
-            <n-button
               v-if="adminStore.isAdmin"
               size="small"
               block
@@ -197,7 +187,7 @@ import { useMessage } from 'naive-ui'
 import { useChaptersStore } from '../stores/chapters.js'
 import { updateChapter, deleteChapter, downloadChapter, getChapterCharacters, setChapterCharacters } from '../api/chapters.js'
 import { listCharacters } from '../api/characters.js'
-import { generateChapter, generateUnlimited, previewPrompt } from '../api/generate.js'
+import { generateChapter, previewPrompt } from '../api/generate.js'
 import { useAdminStore } from '../stores/admin.js'
 import StreamOutput from '../components/common/StreamOutput.vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
@@ -224,7 +214,6 @@ const editor = useEditor({
 
 // Generation state
 const generating = ref(false)
-const generatingUnlimited = ref(false)
 const streamContent = ref('')
 let abortController = null
 
@@ -392,48 +381,6 @@ async function handleGenerate() {
       onError: (msg) => {
         generating.value = false
         message.error(`生成失败: ${msg}`)
-      },
-    },
-  )
-}
-
-async function handleGenerateUnlimited() {
-  if (!store.currentChapter) return
-  if (store.currentChapter.content) {
-    const ok = window.confirm('章节已有内容，无限生成将覆盖现有内容并创建新章节。确定继续？')
-    if (!ok) return
-  }
-
-  generatingUnlimited.value = true
-  streamContent.value = ''
-
-  abortController = generateUnlimited(
-    store.currentChapter.id,
-    {
-      onStart: () => {},
-      onToken: (token) => {
-        streamContent.value += token
-      },
-      onSplitting: (evt) => {
-        message.info(`内容已分割为 ${evt.segment_count} 个章节`)
-      },
-      onSummary: (summary) => {
-        editAiSummary.value = summary
-      },
-      onDone: async (evt) => {
-        generatingUnlimited.value = false
-        if (evt.new_chapter_ids && evt.new_chapter_ids.length) {
-          message.success(`生成完成，已自动创建 ${evt.new_chapter_ids.length} 个新章节`)
-        } else {
-          message.success('生成完成')
-        }
-        await store.selectChapter(store.currentChapter.id)
-        await store.fetchChapters()
-        syncEditBuffers()
-      },
-      onError: (msg) => {
-        generatingUnlimited.value = false
-        message.error(`无限生成失败: ${msg}`)
       },
     },
   )
@@ -654,10 +601,6 @@ onBeforeUnmount(() => {
   margin: 8px 0;
   font-weight: 600;
   font-size: 15px;
-}
-
-.unlimited-btn {
-  margin-bottom: 8px;
 }
 
 .meta-label {

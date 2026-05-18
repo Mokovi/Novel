@@ -41,11 +41,6 @@ const routes = [
     name: 'settings',
     component: () => import('../views/ModelRouteSettings.vue'),
   },
-  {
-    path: '/system-settings',
-    name: 'system-settings',
-    component: () => import('../views/SystemSettings.vue'),
-  },
 ]
 
 const router = createRouter({
