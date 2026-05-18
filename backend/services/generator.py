@@ -88,6 +88,7 @@ def _get_gen_config() -> dict:
     gen = cfg.get("generation", {})
     return {
         "previous_chapter_count": gen.get("previous_chapter_count", 1),
+        "outline_generation_count": gen.get("outline_generation_count", 1),
     }
 
 
@@ -445,5 +446,216 @@ async def generate_chapter_stream(
             yield _sse_event("summary", {"summary": ai_summary})
 
     yield _sse_event("done", {"word_count": word_count, "model": model_name})
+
+
+# ── Outline generation ─────────────────────────────────────
+
+
+def _read_worldview_text() -> str:
+    """Load and return the worldview JSON as a formatted string, or ''."""
+    raw = _read_json_file(DATA_DIR / "worldview.json", "{}")
+    try:
+        d = json.loads(raw) if raw.strip() else {}
+    except json.JSONDecodeError:
+        d = {}
+    return _filter_worldview(d, "medium")
+
+
+def _read_writing_style() -> str:
+    return _read_json_file(DATA_DIR / "writing_style.json", "")
+
+
+def build_arc_prompt_variables(db: Session, arc_id: int) -> dict:
+    """Assemble prompt variables for generating an arc outline."""
+    arc = chapter_repo.get_arc(db, arc_id)
+    if not arc:
+        return {"error": "Arc not found"}
+
+    try:
+        template = prompt_builder.load_template("outline_design", "outline_design_arc.md")
+    except (FileNotFoundError, ValueError) as e:
+        return {"error": str(e)}
+
+    chapters = chapter_repo.get_arc_chapter_summaries(db, arc_id)
+    chapter_lines = []
+    for i, ch in enumerate(chapters, 1):
+        summary = ch.get("ai_summary") or ch.get("summary") or ""
+        chapter_lines.append(f"第{i}章: {ch.get('title', '')}\n摘要: {summary}")
+    chapter_summaries = "\n\n".join(chapter_lines) if chapter_lines else "（暂无章节）"
+
+    worldview_text = _read_worldview_text()
+    writing_style_text = _read_writing_style()
+
+    variables = {
+        "arc_title": arc.title or "",
+        "arc_description": arc.description or "",
+        "chapter_summaries": chapter_summaries,
+        "worldview": worldview_text,
+        "writing_style": writing_style_text,
+    }
+
+    try:
+        prompt = prompt_builder.build_prompt(template, variables)
+    except ValueError as e:
+        return {"error": str(e)}
+
+    token_estimate = prompt_builder.estimate_tokens(prompt)
+    route_config = resolve_api_for_task(db, "outline_design")
+    if not route_config or not route_config.get("api_key"):
+        return {"error": "No API configured for outline_design task"}
+    model_name = route_config.get("model_name", "")
+    template_name = template.get("frontmatter", {}).get("name", template.get("file_name", ""))
+
+    return {
+        "arc": arc,
+        "template": template,
+        "variables": variables,
+        "prompt": prompt,
+        "token_estimate": token_estimate,
+        "route_config": route_config,
+        "model_name": model_name,
+        "template_name": template_name,
+    }
+
+
+def build_volume_prompt_variables(db: Session, volume_id: int) -> dict:
+    """Assemble prompt variables for generating a volume outline."""
+    volumes = chapter_repo.list_volumes(db)
+    volume = next((v for v in volumes if v.id == volume_id), None)
+    if not volume:
+        return {"error": "Volume not found"}
+
+    try:
+        template = prompt_builder.load_template("outline_design", "outline_design_volume.md")
+    except (FileNotFoundError, ValueError) as e:
+        return {"error": str(e)}
+
+    arcs = chapter_repo.get_volume_arc_outlines(db, volume_id)
+    arc_lines = []
+    for a in arcs:
+        arc_lines.append(f"节: {a['arc_title']}\n描述: {a['arc_description']}\n节纲: {a['arc_outline']}")
+        for j, ch in enumerate(a.get("chapters", []), 1):
+            summary = ch.get("ai_summary") or ch.get("summary") or ""
+            arc_lines.append(f"  第{j}章 ({ch.get('title', '')}): {summary}")
+    arc_outlines = "\n\n".join(arc_lines) if arc_lines else "（暂无节纲）"
+
+    worldview_text = _read_worldview_text()
+    writing_style_text = _read_writing_style()
+
+    variables = {
+        "volume_title": volume.title or "",
+        "volume_description": volume.description or "",
+        "arc_outlines": arc_outlines,
+        "worldview": worldview_text,
+        "writing_style": writing_style_text,
+    }
+
+    try:
+        prompt = prompt_builder.build_prompt(template, variables)
+    except ValueError as e:
+        return {"error": str(e)}
+
+    token_estimate = prompt_builder.estimate_tokens(prompt)
+    route_config = resolve_api_for_task(db, "outline_design")
+    if not route_config or not route_config.get("api_key"):
+        return {"error": "No API configured for outline_design task"}
+    model_name = route_config.get("model_name", "")
+    template_name = template.get("frontmatter", {}).get("name", template.get("file_name", ""))
+
+    return {
+        "volume": volume,
+        "template": template,
+        "variables": variables,
+        "prompt": prompt,
+        "token_estimate": token_estimate,
+        "route_config": route_config,
+        "model_name": model_name,
+        "template_name": template_name,
+    }
+
+
+def build_book_prompt_variables(db: Session) -> dict:
+    """Assemble prompt variables for generating a book-level outline."""
+    try:
+        template = prompt_builder.load_template("outline_design", "outline_design_book.md")
+    except (FileNotFoundError, ValueError) as e:
+        return {"error": str(e)}
+
+    volume_outlines_list = chapter_repo.get_all_volume_outlines(db)
+    vol_lines = []
+    for v in volume_outlines_list:
+        vol_lines.append(f"卷: {v['volume_title']}\n描述: {v['volume_description']}\n卷纲: {v['volume_outline']}")
+    volume_outlines = "\n\n".join(vol_lines) if vol_lines else "（暂无卷）"
+
+    worldview_text = _read_worldview_text()
+    writing_style_text = _read_writing_style()
+
+    variables = {
+        "volume_outlines": volume_outlines,
+        "worldview": worldview_text,
+        "writing_style": writing_style_text,
+    }
+
+    try:
+        prompt = prompt_builder.build_prompt(template, variables)
+    except ValueError as e:
+        return {"error": str(e)}
+
+    token_estimate = prompt_builder.estimate_tokens(prompt)
+    route_config = resolve_api_for_task(db, "outline_design")
+    if not route_config or not route_config.get("api_key"):
+        return {"error": "No API configured for outline_design task"}
+    model_name = route_config.get("model_name", "")
+    template_name = template.get("frontmatter", {}).get("name", template.get("file_name", ""))
+
+    return {
+        "template": template,
+        "variables": variables,
+        "prompt": prompt,
+        "token_estimate": token_estimate,
+        "route_config": route_config,
+        "model_name": model_name,
+        "template_name": template_name,
+    }
+
+
+async def generate_outline_stream(
+    db: Session,
+    prompt_ctx: dict,
+) -> AsyncGenerator[str, None]:
+    """Generic SSE stream generator for all outline types.
+
+    *prompt_ctx* is the dict returned by one of the
+    ``build_*_prompt_variables`` functions above.
+    """
+    if prompt_ctx.get("error"):
+        yield _sse_event("error", {"message": prompt_ctx["error"]})
+        return
+
+    route_config = prompt_ctx["route_config"]
+    prompt = prompt_ctx["prompt"]
+    model_name = prompt_ctx["model_name"]
+    token_estimate = prompt_ctx["token_estimate"]
+    provider = route_config.get("provider", "openai")
+
+    yield _sse_event("start", {"model": model_name, "token_estimate": token_estimate})
+
+    collected_tokens: list[str] = []
+    try:
+        if provider == "anthropic":
+            stream = _stream_anthropic(route_config, prompt)
+        else:
+            stream = _stream_openai(route_config, prompt)
+
+        async for token in stream:
+            collected_tokens.append(token)
+            yield _sse_event("token", {"token": token})
+    except Exception as e:
+        logger.error("Outline generation failed: {}", e)
+        yield _sse_event("error", {"message": str(e)})
+        return
+
+    full_content = "".join(collected_tokens).strip()
+    yield _sse_event("done", {"content": full_content, "model": model_name})
 
 

@@ -61,10 +61,11 @@ def _serialize_template(frontmatter: dict, body: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def load_template(task_type: str) -> dict:
-    """Find and parse the default template for *task_type*.
+def load_template(task_type: str, file_name: Optional[str] = None) -> dict:
+    """Find and parse a template for *task_type*.
 
-    Scans ``data/templates/`` for a ``.md`` file whose frontmatter
+    If *file_name* is provided, load that specific file.
+    Otherwise, scan ``data/templates/`` for a ``.md`` file whose frontmatter
     matches ``task_type`` and has ``is_default: true``.
 
     Raises
@@ -72,10 +73,16 @@ def load_template(task_type: str) -> dict:
     FileNotFoundError
         If the templates directory does not exist.
     ValueError
-        If no default template is found for the given task type.
+        If no matching template is found.
     """
     if not TEMPLATES_DIR.exists():
         raise FileNotFoundError(f"Templates directory not found: {TEMPLATES_DIR}")
+
+    if file_name:
+        filepath = TEMPLATES_DIR / file_name
+        if not filepath.exists():
+            raise ValueError(f"Template file not found: {file_name}")
+        return _parse_template_file(filepath)
 
     for f in sorted(TEMPLATES_DIR.iterdir()):
         if f.suffix != ".md":

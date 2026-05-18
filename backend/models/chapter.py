@@ -1,4 +1,4 @@
-"""Volume, Chapter, and ChapterVersion ORM models."""
+"""Volume, Chapter, ChapterVersion, and Arc ORM models."""
 
 from datetime import datetime, timezone
 
@@ -14,6 +14,7 @@ class Volume(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outline: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc), nullable=False
@@ -27,6 +28,9 @@ class Volume(Base):
     chapters: Mapped[list["Chapter"]] = relationship(
         "Chapter", back_populates="volume", cascade="all, delete-orphan"
     )
+    arcs: Mapped[list["Arc"]] = relationship(
+        "Arc", back_populates="volume", cascade="all, delete-orphan"
+    )
 
 
 class Chapter(Base):
@@ -35,6 +39,9 @@ class Chapter(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     volume_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("volumes.id", ondelete="CASCADE"), nullable=False
+    )
+    arc_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("arcs.id", ondelete="SET NULL"), nullable=True
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -58,6 +65,7 @@ class Chapter(Base):
     )
 
     volume: Mapped["Volume"] = relationship("Volume", back_populates="chapters")
+    arc: Mapped["Arc | None"] = relationship("Arc", back_populates="chapters")
     versions: Mapped[list["ChapterVersion"]] = relationship(
         "ChapterVersion", back_populates="chapter", cascade="all, delete-orphan"
     )
@@ -87,3 +95,29 @@ class ChapterVersion(Base):
     )
 
     chapter: Mapped["Chapter"] = relationship("Chapter", back_populates="versions")
+
+
+class Arc(Base):
+    __tablename__ = "arcs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    volume_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("volumes.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outline: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    volume: Mapped["Volume"] = relationship("Volume", back_populates="arcs")
+    chapters: Mapped[list["Chapter"]] = relationship(
+        "Chapter", back_populates="arc", cascade="all, delete-orphan"
+    )

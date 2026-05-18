@@ -139,6 +139,18 @@
                   style="width: 200px"
                 />
               </n-form-item>
+              <n-form-item label="大纲生成轮数">
+                <n-text depth="3" class="form-hint">
+                  生成大纲时运行的推理轮数（1-5），轮数越多大纲越精细。
+                </n-text>
+                <n-input-number
+                  v-model:value="settingsStore.outlineGenerationCount"
+                  :min="1"
+                  :max="5"
+                  :step="1"
+                  style="width: 200px"
+                />
+              </n-form-item>
 
               <n-button
                 type="primary"

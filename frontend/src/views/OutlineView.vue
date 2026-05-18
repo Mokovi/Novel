@@ -6,8 +6,33 @@
     <div class="toolbar">
       <n-button type="primary" @click="showCreateVolume = true">创建卷</n-button>
       <n-button @click="showCreateChapter = true">创建章节</n-button>
+      <n-button @click="showCreateArc = true">创建节</n-button>
       <n-divider vertical />
       <n-button @click="handleBatchDownload">批量下载</n-button>
+    </div>
+
+    <!-- ═══ Book Section ═══ -->
+    <div class="book-section">
+      <div class="section-header">
+        <h2 class="section-title">全书大纲</h2>
+        <n-button
+          size="small"
+          :loading="bookGenerating"
+          @click="handleGenerateBook"
+        >生成全书大纲</n-button>
+      </div>
+      <div v-if="bookOutline" class="outline-text">
+        <n-input
+          v-model:value="bookOutline"
+          type="textarea"
+          :autosize="{ minRows: 3, maxRows: 12 }"
+          placeholder="全书大纲内容..."
+        />
+        <div class="outline-actions">
+          <n-button size="tiny" @click="handleSaveBookOutline">保存</n-button>
+        </div>
+      </div>
+      <p v-else class="outline-empty">尚未生成全书大纲</p>
     </div>
 
     <!-- Volume list -->
@@ -17,10 +42,19 @@
         :key="vol.id"
         class="volume-section"
       >
-        <h2 class="volume-title">
-          <span class="volume-title-text">{{ vol.title }}</span>
+        <!-- Volume header -->
+        <div class="volume-header">
+          <h2 class="volume-title">
+            <span class="volume-title-text">{{ vol.title }}</span>
+          </h2>
           <div class="volume-meta">
             <span class="chapter-count">{{ chaptersByVolume(vol.id).length }} 章</span>
+            <n-button size="tiny" @click="showVolumeOutline[vol.id] = !showVolumeOutline[vol.id]">
+              {{ showVolumeOutline[vol.id] ? '收起' : '卷纲' }}
+            </n-button>
+            <n-button size="tiny" :loading="volGenerating[vol.id]" @click="handleGenerateVolume(vol)">
+              生成卷纲
+            </n-button>
             <n-popconfirm @positive-click="handleDeleteVolume(vol.id)">
               <template #trigger>
                 <n-button size="tiny" text class="delete-btn" @click.stop>删除卷</n-button>
@@ -28,42 +62,139 @@
               确定删除此卷及其下所有章节？
             </n-popconfirm>
           </div>
-        </h2>
+        </div>
 
         <p v-if="vol.description" class="volume-desc">{{ vol.description }}</p>
 
-        <div v-if="chaptersByVolume(vol.id).length" class="chapter-list">
+        <!-- Volume outline fold panel -->
+        <div v-if="showVolumeOutline[vol.id]" class="outline-text">
+          <n-input
+            v-model:value="volOutlines[vol.id]"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 8 }"
+            placeholder="卷纲内容..."
+          />
+          <div class="outline-actions">
+            <n-button size="tiny" @click="handleSaveVolumeOutline(vol)">保存</n-button>
+          </div>
+        </div>
+
+        <!-- Arc sections -->
+        <div v-if="arcsByVolume(vol.id).length" class="arc-list">
           <div
-            v-for="ch in chaptersByVolume(vol.id)"
-            :key="ch.id"
-            class="chapter-card"
-            :class="[`status-${ch.status}`]"
-            @click="$router.push(`/editor/${ch.id}`)"
+            v-for="arc in arcsByVolume(vol.id)"
+            :key="arc.id"
+            class="arc-section"
           >
-            <div class="chapter-body">
-              <h3 class="chapter-title">{{ ch.title }}</h3>
-              <p v-if="ch.summary" class="chapter-summary">{{ ch.summary }}</p>
-              <div class="chapter-footer">
-                <n-tag size="small" :type="statusType(ch.status)">
-                  {{ statusLabel(ch.status) }}
-                </n-tag>
-                <span class="word-count">{{ ch.word_count }} 字</span>
+            <div class="arc-header">
+              <span class="arc-title">{{ arc.title }}</span>
+              <div class="arc-meta">
+                <span class="chapter-count">{{ chaptersByArc(arc.id).length }} 章</span>
+                <n-button size="tiny" @click="showArcOutline[arc.id] = !showArcOutline[arc.id]">
+                  {{ showArcOutline[arc.id] ? '收起' : '节纲' }}
+                </n-button>
+                <n-button size="tiny" :loading="arcGenerating[arc.id]" @click="handleGenerateArc(arc)">
+                  生成节纲
+                </n-button>
+                <n-popconfirm @positive-click="handleDeleteArc(arc.id)">
+                  <template #trigger>
+                    <n-button size="tiny" text class="delete-btn" @click.stop>删除</n-button>
+                  </template>
+                  确定删除此节？
+                </n-popconfirm>
               </div>
             </div>
-            <div class="chapter-actions" @click.stop>
-              <n-button size="tiny" @click="handleGenerateChapter(ch)">生成</n-button>
-              <n-button size="tiny" @click="handleDownloadChapter(ch)">下载</n-button>
-              <n-popconfirm @positive-click="handleDeleteChapter(ch.id, ch.volume_id)">
-                <template #trigger>
-                  <n-button size="tiny" text class="delete-btn">删除</n-button>
-                </template>
-                确定删除此章节？
-              </n-popconfirm>
+            <p v-if="arc.description" class="arc-desc">{{ arc.description }}</p>
+
+            <!-- Arc outline fold panel -->
+            <div v-if="showArcOutline[arc.id]" class="outline-text">
+              <n-input
+                v-model:value="arcOutlines[arc.id]"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 6 }"
+                placeholder="节纲内容..."
+              />
+              <div class="outline-actions">
+                <n-button size="tiny" @click="handleSaveArcOutline(arc)">保存</n-button>
+              </div>
+            </div>
+
+            <!-- Chapter cards -->
+            <div v-if="chaptersByArc(arc.id).length" class="chapter-list">
+              <div
+                v-for="ch in chaptersByArc(arc.id)"
+                :key="ch.id"
+                class="chapter-card"
+                :class="[`status-${ch.status}`]"
+                @click="$router.push(`/editor/${ch.id}`)"
+              >
+                <div class="chapter-body">
+                  <h3 class="chapter-title">{{ ch.title }}</h3>
+                  <p v-if="ch.summary || ch.ai_summary" class="chapter-summary">
+                    {{ ch.ai_summary || ch.summary }}
+                  </p>
+                  <div v-if="ch.ai_summary" class="chapter-footer">
+                    <n-tag size="small" type="info">AI 摘要</n-tag>
+                  </div>
+                  <div class="chapter-footer">
+                    <n-tag size="small" :type="statusType(ch.status)">
+                      {{ statusLabel(ch.status) }}
+                    </n-tag>
+                    <span class="word-count">{{ ch.word_count }} 字</span>
+                  </div>
+                </div>
+                <div class="chapter-actions" @click.stop>
+                  <n-button size="tiny" @click="handleGenerateChapter(ch)">生成</n-button>
+                  <n-button size="tiny" @click="handleRegenerateSummary(ch)">重写摘要</n-button>
+                  <n-button size="tiny" @click="handleDownloadChapter(ch)">下载</n-button>
+                  <n-popconfirm @positive-click="handleDeleteChapter(ch.id, ch.volume_id)">
+                    <template #trigger>
+                      <n-button size="tiny" text class="delete-btn">删除</n-button>
+                    </template>
+                    确定删除此章节？
+                  </n-popconfirm>
+                </div>
+              </div>
+            </div>
+            <div v-else class="empty-chapters">
+              <n-empty description="该节下暂无章节" size="small" />
             </div>
           </div>
         </div>
-        <div v-else class="empty-chapters">
-          <n-empty description="该卷下暂无章节" size="small" />
+
+        <!-- Unassigned chapters -->
+        <div v-if="unassignedChapters(vol.id).length" class="unassigned-section">
+          <div class="unassigned-header">未归属章节</div>
+          <div class="chapter-list">
+            <div
+              v-for="ch in unassignedChapters(vol.id)"
+              :key="ch.id"
+              class="chapter-card"
+              :class="[`status-${ch.status}`]"
+              @click="$router.push(`/editor/${ch.id}`)"
+            >
+              <div class="chapter-body">
+                <h3 class="chapter-title">{{ ch.title }}</h3>
+                <p v-if="ch.summary" class="chapter-summary">{{ ch.summary }}</p>
+                <div class="chapter-footer">
+                  <n-tag size="small" :type="statusType(ch.status)">
+                    {{ statusLabel(ch.status) }}
+                  </n-tag>
+                  <span class="word-count">{{ ch.word_count }} 字</span>
+                </div>
+              </div>
+              <div class="chapter-actions" @click.stop>
+                <n-button size="tiny" @click="handleGenerateChapter(ch)">生成</n-button>
+                <n-button size="tiny" @click="handleDownloadChapter(ch)">下载</n-button>
+                <n-popconfirm @positive-click="handleDeleteChapter(ch.id, ch.volume_id)">
+                  <template #trigger>
+                    <n-button size="tiny" text class="delete-btn">删除</n-button>
+                  </template>
+                  确定删除此章节？
+                </n-popconfirm>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -86,6 +217,28 @@
       </template>
     </n-modal>
 
+    <!-- Create Arc Modal -->
+    <n-modal v-model:show="showCreateArc" title="创建节" preset="card" style="width: 520px">
+      <n-form>
+        <n-form-item label="所属卷">
+          <n-select
+            v-model:value="newArc.volume_id"
+            :options="volumeOptions"
+            placeholder="选择卷"
+          />
+        </n-form-item>
+        <n-form-item label="节标题">
+          <n-input v-model:value="newArc.title" placeholder="如：第一章 开端" />
+        </n-form-item>
+        <n-form-item label="描述">
+          <n-input v-model:value="newArc.description" type="textarea" rows="3" placeholder="本节描述" />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <n-button type="primary" @click="handleCreateArc">创建</n-button>
+      </template>
+    </n-modal>
+
     <!-- Create Chapter Modal -->
     <n-modal v-model:show="showCreateChapter" title="创建章节" preset="card" style="width: 520px">
       <n-form>
@@ -94,6 +247,15 @@
             v-model:value="newChapter.volume_id"
             :options="volumeOptions"
             placeholder="选择卷"
+            @update:value="onVolumeChange"
+          />
+        </n-form-item>
+        <n-form-item label="所属节">
+          <n-select
+            v-model:value="newChapter.arc_id"
+            :options="arcOptionsForCreate"
+            placeholder="选择节（可选）"
+            clearable
           />
         </n-form-item>
         <n-form-item label="章节标题">
@@ -107,30 +269,99 @@
         <n-button type="primary" @click="handleCreateChapter">创建</n-button>
       </template>
     </n-modal>
+
+    <!-- SSE Generation Output Modal -->
+    <n-modal v-model:show="showGenOutput" :mask-closable="false" style="width: 700px">
+      <n-card :title="genTitle" style="max-height: 80vh; overflow-y: auto">
+        <div class="gen-output">
+          <p v-if="genModel" class="gen-meta">模型: {{ genModel }} | 预估: {{ genTokens }} tokens</p>
+          <div class="gen-text">{{ genOutput }}</div>
+          <n-spin v-if="genRunning" size="small" />
+        </div>
+        <template #action>
+          <n-space justify="end">
+            <n-button v-if="genRunning" @click="genAbort?.abort()">取消</n-button>
+            <n-button v-else type="primary" @click="showGenOutput = false">关闭</n-button>
+          </n-space>
+        </template>
+      </n-card>
+    </n-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { useMessage } from 'naive-ui'
 import { useChaptersStore } from '../stores/chapters.js'
-import { createVolume, createChapter, deleteChapter, deleteVolume, downloadChapter, downloadAllChapters } from '../api/chapters.js'
+import { useSettingsStore } from '../stores/settings.js'
+import {
+  createVolume, createChapter, deleteChapter, deleteVolume,
+  downloadChapter, downloadAllChapters,
+  createArc, deleteArc, updateArc,
+  updateVolume,
+} from '../api/chapters.js'
+import {
+  generateArcOutline, generateVolumeOutline, generateBookOutline,
+  regenerateSummary,
+} from '../api/generate.js'
 
 const router = useRouter()
+const message = useMessage()
 const store = useChaptersStore()
+const settingsStore = useSettingsStore()
 
 const showCreateVolume = ref(false)
 const showCreateChapter = ref(false)
+const showCreateArc = ref(false)
 
 const newVolume = ref({ title: '', description: '' })
-const newChapter = ref({ volume_id: null, title: '', summary: '' })
+const newChapter = ref({ volume_id: null, arc_id: null, title: '', summary: '' })
+const newArc = ref({ volume_id: null, title: '', description: '' })
+
+// Volume/Arc outline display state
+const showVolumeOutline = reactive({})
+const showArcOutline = reactive({})
+const volOutlines = reactive({})
+const arcOutlines = reactive({})
+
+// Book outline
+const bookOutline = ref('')
+
+// Generation state
+const showGenOutput = ref(false)
+const genTitle = ref('')
+const genOutput = ref('')
+const genModel = ref('')
+const genTokens = ref(0)
+const genRunning = ref(false)
+const genAbort = ref(null)
+const bookGenerating = ref(false)
+const volGenerating = reactive({})
+const arcGenerating = reactive({})
 
 const volumeOptions = computed(() =>
   store.volumes.map(v => ({ label: v.title, value: v.id }))
 )
 
+const arcOptionsForCreate = computed(() => {
+  if (!newChapter.value.volume_id) return []
+  return store.arcs
+    .filter(a => a.volume_id === newChapter.value.volume_id)
+    .map(a => ({ label: a.title, value: a.id }))
+})
+
 const chaptersByVolume = (volId) =>
   store.chapters.filter(c => c.volume_id === volId)
+
+const arcsByVolume = (volId) =>
+  store.arcs.filter(a => a.volume_id === volId)
+
+const chaptersByArc = (arcId) =>
+  store.chapters.filter(c => c.arc_id === arcId)
+
+const unassignedChapters = (volId) =>
+  store.chapters.filter(c => c.volume_id === volId && !c.arc_id)
 
 const statusType = (s) =>
   ({ pending: 'default', generating: 'warning', completed: 'success' }[s] || 'default')
@@ -138,33 +369,80 @@ const statusType = (s) =>
 const statusLabel = (s) =>
   ({ pending: '待生成', generating: '生成中', completed: '已完成' }[s] || s)
 
+function onVolumeChange(volId) {
+  newChapter.value.arc_id = null
+}
+
+function openGenModal(title) {
+  genTitle.value = title
+  genOutput.value = ''
+  genModel.value = ''
+  genTokens.value = 0
+  genRunning.value = true
+  showGenOutput.value = true
+}
+
 async function handleCreateVolume() {
   await createVolume(newVolume.value)
   newVolume.value = { title: '', description: '' }
   showCreateVolume.value = false
   await store.fetchVolumes()
+  message.success('卷已创建')
+}
+
+async function handleCreateArc() {
+  if (!newArc.value.volume_id) {
+    message.warning('请选择所属卷')
+    return
+  }
+  await createArc(newArc.value)
+  newArc.value = { volume_id: null, title: '', description: '' }
+  showCreateArc.value = false
+  await store.fetchArcs()
+  message.success('节已创建')
 }
 
 async function handleCreateChapter() {
   await createChapter(newChapter.value)
-  newChapter.value = { volume_id: null, title: '', summary: '' }
+  newChapter.value = { volume_id: null, arc_id: null, title: '', summary: '' }
   showCreateChapter.value = false
   await store.fetchChapters()
+  message.success('章节已创建')
 }
 
 async function handleDeleteVolume(id) {
   await deleteVolume(id)
   await store.fetchVolumes()
   await store.fetchChapters()
+  await store.fetchArcs()
+  message.success('卷已删除')
 }
 
 async function handleDeleteChapter(id, volumeId) {
   await deleteChapter(id)
   await store.fetchChapters(volumeId)
+  message.success('章节已删除')
+}
+
+async function handleDeleteArc(id) {
+  await deleteArc(id)
+  await store.fetchArcs()
+  await store.fetchChapters()
+  message.success('节已删除')
 }
 
 function handleGenerateChapter(ch) {
   router.push(`/editor/${ch.id}?generate=1`)
+}
+
+async function handleRegenerateSummary(ch) {
+  try {
+    const res = await regenerateSummary(ch.id)
+    ch.ai_summary = res.summary
+    message.success('摘要已重写')
+  } catch (e) {
+    message.error(e.message || '重写摘要失败')
+  }
 }
 
 async function handleDownloadChapter(ch) {
@@ -187,9 +465,92 @@ async function handleBatchDownload() {
   URL.revokeObjectURL(url)
 }
 
+// ── Outline generation ────────────────────────────────────
+
+async function runOutlineSSE(label, urlFn) {
+  openGenModal(label)
+  genAbort.value = urlFn({
+    onStart: (evt) => {
+      genModel.value = evt.model || ''
+      genTokens.value = evt.token_estimate || 0
+    },
+    onToken: (token) => {
+      genOutput.value += token
+    },
+    onDone: () => {
+      genRunning.value = false
+      message.success(`${label} 生成完成`)
+    },
+    onError: (err) => {
+      genRunning.value = false
+      message.error(err)
+    },
+  })
+}
+
+async function handleGenerateBook() {
+  bookGenerating.value = true
+  try {
+    await runOutlineSSE('全书大纲', (handlers) => generateBookOutline(handlers))
+  } finally {
+    bookGenerating.value = false
+  }
+}
+
+async function handleGenerateVolume(vol) {
+  volGenerating[vol.id] = true
+  try {
+    await runOutlineSSE(`卷纲: ${vol.title}`, (handlers) => generateVolumeOutline(vol.id, handlers))
+  } finally {
+    volGenerating[vol.id] = false
+  }
+}
+
+async function handleGenerateArc(arc) {
+  arcGenerating[arc.id] = true
+  try {
+    await runOutlineSSE(`节纲: ${arc.title}`, (handlers) => generateArcOutline(arc.id, handlers))
+  } finally {
+    arcGenerating[arc.id] = false
+  }
+}
+
+// ── Save outlines ─────────────────────────────────────────
+
+async function handleSaveBookOutline() {
+  settingsStore.bookOutline = bookOutline.value
+  await settingsStore.saveBookOutline()
+  message.success('全书大纲已保存')
+}
+
+async function handleSaveVolumeOutline(vol) {
+  await updateVolume(vol.id, { outline: volOutlines[vol.id] })
+  message.success('卷纲已保存')
+}
+
+async function handleSaveArcOutline(arc) {
+  if (arcOutlines[arc.id] !== undefined) {
+    await updateArc(arc.id, { outline: arcOutlines[arc.id] })
+  }
+  message.success('节纲已保存')
+}
+
 onMounted(async () => {
-  await store.fetchVolumes()
-  await store.fetchChapters()
+  await Promise.all([
+    store.fetchVolumes(),
+    store.fetchChapters(),
+    store.fetchArcs(),
+    settingsStore.fetchBookOutline(),
+  ])
+  bookOutline.value = settingsStore.bookOutline
+
+  // Initialize outline displays and store values
+  for (const vol of store.volumes) {
+    volOutlines[vol.id] = vol.outline || ''
+  }
+  for (const arc of store.arcs) {
+    arcOutlines[arc.id] = arc.outline || ''
+  }
 })
 </script>
 
@@ -217,17 +578,46 @@ onMounted(async () => {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Book section */
+.book-section {
+  margin-bottom: 28px;
+  padding: 16px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-accent);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-accent-dark);
+  margin: 0;
+}
+
 /* Volume */
 .volume-section {
   margin-bottom: 28px;
   animation: fade-in-up 0.4s ease both;
 }
 
-.volume-title {
+.volume-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin: 0 0 6px;
+}
+
+.volume-title {
+  margin: 0;
 }
 
 .volume-title-text {
@@ -241,7 +631,8 @@ onMounted(async () => {
 .volume-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .chapter-count {
@@ -254,6 +645,78 @@ onMounted(async () => {
   color: var(--color-text-secondary);
   margin: 0 0 12px;
   line-height: 1.5;
+}
+
+/* Outline text */
+.outline-text {
+  margin: 8px 0 12px;
+}
+
+.outline-actions {
+  margin-top: 6px;
+}
+
+.outline-empty {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* Arc */
+.arc-list {
+  margin: 12px 0 0 16px;
+  border-left: 2px solid var(--color-border-light);
+  padding-left: 16px;
+}
+
+.arc-section {
+  margin-bottom: 16px;
+  animation: fade-in-up 0.35s ease both;
+}
+
+.arc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.arc-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.arc-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.arc-desc {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+/* Unassigned */
+.unassigned-section {
+  margin: 12px 0 0 16px;
+  padding-left: 16px;
+}
+
+.unassigned-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: var(--color-bg-page);
+  border-radius: var(--radius-sm);
+  display: inline-block;
 }
 
 /* Chapter list */
@@ -353,5 +816,23 @@ onMounted(async () => {
 
 .empty-volume {
   margin-top: 60px;
+}
+
+/* Generation output */
+.gen-output {
+  min-height: 200px;
+}
+
+.gen-meta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0 0 12px;
+}
+
+.gen-text {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
 }
 </style>

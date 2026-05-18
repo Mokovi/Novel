@@ -11,3 +11,11 @@ export function getGenerationSettings() {
 export function updateGenerationSettings(data) {
   return http.put('/settings/generation', data)
 }
+
+export function getBookOutline() {
+  return http.get('/settings/book-outline')
+}
+
+export function updateBookOutline(data) {
+  return http.put('/settings/book-outline', data)
+}

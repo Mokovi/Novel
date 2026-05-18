@@ -5,9 +5,11 @@ from typing import Optional
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from backend.models.chapter import Chapter, ChapterVersion, Volume
+from backend.models.chapter import Arc, Chapter, ChapterVersion, Volume
 from backend.models.story_line import ChapterCharacter
 from backend.schemas.chapter import (
+    ArcCreate,
+    ArcUpdate,
     ChapterCreate,
     ChapterUpdate,
     ReorderItem,
@@ -188,3 +190,132 @@ def set_chapter_characters(db: Session, chapter_id: int, character_ids: list[int
     db.commit()
     db.refresh(chapter)
     return [cc.character for cc in chapter.character_associations]
+
+
+# ── Arc CRUD ───────────────────────────────────────────────
+
+
+def list_arcs(db: Session, volume_id: Optional[int] = None) -> list[Arc]:
+    query = db.query(Arc)
+    if volume_id is not None:
+        query = query.filter(Arc.volume_id == volume_id)
+    return query.order_by(Arc.sort_order, Arc.id).all()
+
+
+def create_arc(db: Session, data: ArcCreate) -> Arc:
+    arc = Arc(**data.model_dump())
+    db.add(arc)
+    db.commit()
+    db.refresh(arc)
+    return arc
+
+
+def get_arc(db: Session, arc_id: int) -> Optional[Arc]:
+    return db.get(Arc, arc_id)
+
+
+def update_arc(db: Session, arc_id: int, data: ArcUpdate) -> Optional[Arc]:
+    arc = db.get(Arc, arc_id)
+    if not arc:
+        return None
+    update_data = data.model_dump(exclude_unset=True)
+    if not update_data:
+        return arc
+    for key, value in update_data.items():
+        setattr(arc, key, value)
+    db.commit()
+    db.refresh(arc)
+    return arc
+
+
+def delete_arc(db: Session, arc_id: int) -> bool:
+    arc = db.get(Arc, arc_id)
+    if not arc:
+        return False
+    db.delete(arc)
+    db.commit()
+    return True
+
+
+def reorder_arcs(db: Session, items: list) -> None:
+    for item in items:
+        db.execute(
+            update(Arc)
+            .where(Arc.id == item.id)
+            .values(sort_order=item.sort_order)
+        )
+    db.commit()
+
+
+# ── Outline helper queries ─────────────────────────────────
+
+
+def save_arc_outline(db: Session, arc_id: int, outline: str) -> bool:
+    arc = db.get(Arc, arc_id)
+    if not arc:
+        return False
+    arc.outline = outline
+    db.commit()
+    return True
+
+
+def save_volume_outline(db: Session, volume_id: int, outline: str) -> bool:
+    volume = db.get(Volume, volume_id)
+    if not volume:
+        return False
+    volume.outline = outline
+    db.commit()
+    return True
+
+
+def get_arc_chapter_summaries(db: Session, arc_id: int) -> list[dict]:
+    """Get all chapters in an arc with their title, summary, and ai_summary."""
+    chapters = (
+        db.query(Chapter)
+        .filter(Chapter.arc_id == arc_id)
+        .order_by(Chapter.sort_order, Chapter.id)
+        .all()
+    )
+    return [
+        {
+            "title": c.title or "",
+            "summary": c.summary or "",
+            "ai_summary": c.ai_summary or "",
+        }
+        for c in chapters
+    ]
+
+
+def get_volume_arc_outlines(db: Session, volume_id: int) -> list[dict]:
+    """Get all arcs in a volume with their outline and chapter summaries."""
+    arcs = (
+        db.query(Arc)
+        .filter(Arc.volume_id == volume_id)
+        .order_by(Arc.sort_order, Arc.id)
+        .all()
+    )
+    result = []
+    for arc in arcs:
+        chapters = get_arc_chapter_summaries(db, arc.id)
+        result.append({
+            "arc_id": arc.id,
+            "arc_title": arc.title or "",
+            "arc_description": arc.description or "",
+            "arc_outline": arc.outline or "",
+            "chapters": chapters,
+        })
+    return result
+
+
+def get_all_volume_outlines(db: Session) -> list[dict]:
+    """Get all volumes with their outline for book-level generation."""
+    volumes = db.query(Volume).order_by(Volume.sort_order, Volume.id).all()
+    return [
+        {
+            "volume_id": v.id,
+            "volume_title": v.title or "",
+            "volume_description": v.description or "",
+            "volume_outline": v.outline or "",
+        }
+        for v in volumes
+    ]
