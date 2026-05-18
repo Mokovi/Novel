@@ -22,3 +22,7 @@ def load_config() -> dict:
 
 def get_env(key: str, default: str | None = None) -> str | None:
     return os.getenv(key, default)
+
+
+def get_admin_password() -> str:
+    return os.getenv("ADMIN_PASSWORD", "root")

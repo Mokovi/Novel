@@ -22,12 +22,15 @@
 
               <!-- Version footer -->
               <div class="sidebar-footer">
-                <n-tooltip trigger="hover">
-                  <template #trigger>
-                    <n-text depth="3" class="version-text">v{{ version }}</n-text>
-                  </template>
-                  当前项目版本
-                </n-tooltip>
+                <div class="footer-row">
+                  <n-tooltip trigger="hover">
+                    <template #trigger>
+                      <n-text depth="3" class="version-text">v{{ version }}</n-text>
+                    </template>
+                    当前项目版本
+                  </n-tooltip>
+                  <n-tag v-if="adminStore.isAdmin" type="warning" size="tiny" class="admin-badge">ADMIN</n-tag>
+                </div>
               </div>
             </div>
           </n-layout-sider>
@@ -41,18 +44,22 @@
             </router-view>
           </n-layout-content>
         </n-layout>
+
+        <AdminLoginModal v-model:show="showAdminModal" />
       </n-layout>
     </n-message-provider>
   </n-config-provider>
 </template>
 
 <script setup>
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { NConfigProvider, NMessageProvider, NLayout, NLayoutSider, NLayoutContent, NMenu, NText, NTooltip } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NLayout, NLayoutSider, NLayoutContent, NMenu, NTag, NText, NTooltip } from 'naive-ui'
 import { zhCN } from 'naive-ui'
 import { lightThemeOverrides } from './styles/naive-theme.js'
 import AppIcon from './components/common/AppIcon.vue'
+import AdminLoginModal from './components/common/AdminLoginModal.vue'
+import { useAdminStore } from './stores/admin.js'
 import DashboardIcon from './assets/icons/DashboardIcon.vue'
 import OutlineIcon from './assets/icons/OutlineIcon.vue'
 import EditorIcon from './assets/icons/EditorIcon.vue'
@@ -109,17 +116,31 @@ const menuOptions = [
 ]
 
 const version = ref('')
+const adminStore = useAdminStore()
+const showAdminModal = ref(false)
+
+function handleKeydown(e) {
+  if (e.ctrlKey && e.key === 'u') {
+    e.preventDefault()
+    showAdminModal.value = true
+  }
+}
 
 function onMenuSelect(key) {
   router.push({ name: key })
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeydown)
   try {
     const res = await fetch('/api/v1/health')
     const data = await res.json()
     version.value = data.version || ''
   } catch { /* health endpoint not available */ }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
 })
 </script>
 
@@ -165,10 +186,21 @@ onMounted(async () => {
   border-top: 1px solid #2a2520;
 }
 
+.footer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .version-text {
   font-size: 12px;
   cursor: default;
   color: var(--color-text-on-dark-muted) !important;
+}
+
+.admin-badge {
+  font-size: 10px;
+  letter-spacing: 1px;
 }
 
 .main-content {

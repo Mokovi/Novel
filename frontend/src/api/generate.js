@@ -76,3 +76,22 @@ export function generateChapter(chapterId, handlers, overrides = {}) {
 
   return controller
 }
+
+/**
+ * Get a prompt preview for a chapter without generating.
+ *
+ * @param {number} chapterId
+ * @returns {Promise<{prompt: string, token_estimate: number, model: string, template_name: string}>}
+ */
+export async function previewPrompt(chapterId) {
+  const resp = await fetch(`${BASE}/generate/chapter/${chapterId}/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(err.detail || `HTTP ${resp.status}`)
+  }
+  const data = await resp.json()
+  return { data }
+}

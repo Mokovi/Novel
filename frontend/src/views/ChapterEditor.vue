@@ -128,6 +128,16 @@
             >
               {{ generating ? '生成中...' : store.currentChapter.content ? '重新生成' : 'AI 生成' }}
             </n-button>
+            <n-button
+              v-if="adminStore.isAdmin"
+              size="small"
+              block
+              secondary
+              @click="handlePreviewPrompt"
+              class="preview-btn"
+            >
+              提示词预览
+            </n-button>
             <n-form-item label="字数">
               <n-text>{{ editContent.length }} 字</n-text>
             </n-form-item>
@@ -137,6 +147,27 @@
         </n-scrollbar>
       </n-layout-sider>
     </n-layout>
+
+    <!-- Prompt preview modal -->
+    <n-modal v-model:show="showPreviewModal" preset="card" title="提示词预览" style="max-width: 800px">
+      <n-space v-if="previewLoading" justify="center">
+        <n-spin />
+      </n-space>
+      <n-space v-else-if="previewData" vertical :size="12">
+        <n-space>
+          <n-tag type="info" size="small">模型: {{ previewData.model }}</n-tag>
+          <n-tag size="small">模板: {{ previewData.template_name }}</n-tag>
+          <n-tag size="small">预估: ~{{ previewData.token_estimate }} tokens</n-tag>
+        </n-space>
+        <n-input
+          type="textarea"
+          :value="previewData.prompt"
+          readonly
+          rows="20"
+          class="preview-textarea"
+        />
+      </n-space>
+    </n-modal>
   </div>
 </template>
 
@@ -147,13 +178,15 @@ import { useMessage } from 'naive-ui'
 import { useChaptersStore } from '../stores/chapters.js'
 import { updateChapter, deleteChapter, downloadChapter, getChapterCharacters, setChapterCharacters } from '../api/chapters.js'
 import { listCharacters } from '../api/characters.js'
-import { generateChapter } from '../api/generate.js'
+import { generateChapter, previewPrompt } from '../api/generate.js'
+import { useAdminStore } from '../stores/admin.js'
 import StreamOutput from '../components/common/StreamOutput.vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 
 const store = useChaptersStore()
+const adminStore = useAdminStore()
 const router = useRouter()
 const route = useRoute()
 const message = useMessage()
@@ -174,6 +207,11 @@ const editor = useEditor({
 const generating = ref(false)
 const streamContent = ref('')
 let abortController = null
+
+// Preview state
+const showPreviewModal = ref(false)
+const previewData = ref(null)
+const previewLoading = ref(false)
 
 // Edit buffers
 const editTitle = ref('')
@@ -332,6 +370,21 @@ async function handleGenerate() {
       },
     },
   )
+}
+
+async function handlePreviewPrompt() {
+  if (!store.currentChapter) return
+  previewLoading.value = true
+  showPreviewModal.value = true
+  try {
+    const res = await previewPrompt(store.currentChapter.id)
+    previewData.value = res.data
+  } catch (e) {
+    message.error(`获取预览失败: ${e.message}`)
+    showPreviewModal.value = false
+  } finally {
+    previewLoading.value = false
+  }
 }
 
 // Save
@@ -534,6 +587,14 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 4px;
   margin-top: -8px;
+}
+
+.preview-btn {
+  margin-top: 4px;
+}
+
+.preview-textarea :deep(textarea) {
+  font-family: monospace;
 }
 
 .empty-editor {

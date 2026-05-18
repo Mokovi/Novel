@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.schemas.generate import GenerateRequest
-from backend.services.generator import generate_chapter_stream
+from backend.services.generator import build_prompt_variables, generate_chapter_stream
 
 router = APIRouter(prefix="/api/v1/generate", tags=["generate"])
 
@@ -34,3 +34,20 @@ async def generate_chapter(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/chapter/{chapter_id}/preview")
+async def preview_chapter_prompt(
+    chapter_id: int,
+    db: Session = Depends(get_db),
+):
+    """Return assembled prompt and metadata for a chapter without generating."""
+    ctx = build_prompt_variables(db, chapter_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=404, detail=ctx["error"])
+    return {
+        "prompt": ctx["prompt"],
+        "token_estimate": ctx["token_estimate"],
+        "model": ctx["model_name"],
+        "template_name": ctx["template_name"],
+    }

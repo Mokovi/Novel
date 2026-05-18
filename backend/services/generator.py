@@ -185,41 +185,38 @@ async def _stream_anthropic(
                     continue
 
 
-# ── Public API ─────────────────────────────────────────────
+# ── Prompt variable assembly ────────────────────────────────
 
 
-async def generate_chapter_stream(
-    db: Session,
-    chapter_id: int,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-) -> AsyncGenerator[str, None]:
-    """Async generator yielding SSE events for chapter generation."""
+def build_prompt_variables(db: Session, chapter_id: int) -> dict:
+    """Assemble all prompt variables for a chapter without streaming.
+
+    Returns a dict with keys:
+        chapter, template, variables, prompt, token_estimate,
+        route_config, model_name, template_name, error
+    On error, ``error`` is set and the caller should not proceed.
+    """
     # 1. Load chapter
     chapter = chapter_repo.get_chapter(db, chapter_id)
     if not chapter:
-        yield _sse_event("error", {"message": "Chapter not found"})
-        return
+        return {"error": "Chapter not found"}
 
     # 2. Load template
     try:
         template = prompt_builder.load_template("chapter_writing")
     except (FileNotFoundError, ValueError) as e:
-        yield _sse_event("error", {"message": str(e)})
-        return
+        return {"error": str(e)}
 
     # 3. Build variables from JSON files + chapter data
     worldview_raw = _read_json_file(DATA_DIR / "worldview.json", "{}")
     writing_style_text = _read_json_file(DATA_DIR / "writing_style.json", "")
 
-    # Apply worldview level filter
     try:
         worldview_dict = json.loads(worldview_raw) if worldview_raw.strip() else {}
     except json.JSONDecodeError:
         worldview_dict = {}
     worldview_text = _filter_worldview(worldview_dict, chapter.worldview_level or "medium")
 
-    # Load associated character profiles
     characters = chapter_repo.get_chapter_characters(db, chapter_id)
     character_profiles = _format_character_profiles(characters) if characters else ""
 
@@ -240,8 +237,7 @@ async def generate_chapter_stream(
     try:
         prompt = prompt_builder.build_prompt(template, variables)
     except ValueError as e:
-        yield _sse_event("error", {"message": str(e)})
-        return
+        return {"error": str(e)}
 
     token_estimate = prompt_builder.estimate_tokens(prompt)
     logger.info("Prompt built for chapter {}: {} chars, ~{} tokens",
@@ -250,16 +246,48 @@ async def generate_chapter_stream(
     # 5. Get model config
     route_config = resolve_api_for_task(db, "chapter_writing")
     if not route_config:
-        yield _sse_event("error", {"message": "No API resolved for chapter_writing. Bind a plan to this task."})
-        return
+        return {"error": "No API resolved for chapter_writing. Bind a plan to this task."}
     if not route_config.get("api_key"):
-        yield _sse_event("error", {"message": "API key not configured for the resolved API"})
+        return {"error": "API key not configured for the resolved API"}
+
+    model_name = route_config.get("model_name", "")
+    template_name = template.get("frontmatter", {}).get("name", template.get("file_name", ""))
+
+    return {
+        "chapter": chapter,
+        "template": template,
+        "variables": variables,
+        "prompt": prompt,
+        "token_estimate": token_estimate,
+        "route_config": route_config,
+        "model_name": model_name,
+        "template_name": template_name,
+    }
+
+
+# ── Public API ─────────────────────────────────────────────
+
+
+async def generate_chapter_stream(
+    db: Session,
+    chapter_id: int,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+) -> AsyncGenerator[str, None]:
+    """Async generator yielding SSE events for chapter generation."""
+    # 1-5. Assemble prompt variables
+    ctx = build_prompt_variables(db, chapter_id)
+    if ctx.get("error"):
+        yield _sse_event("error", {"message": ctx["error"]})
         return
 
     # 6. Stream from LLM
     collected_tokens: list[str] = []
+    route_config = ctx["route_config"]
+    prompt = ctx["prompt"]
+    model_name = ctx["model_name"]
+    token_estimate = ctx["token_estimate"]
     provider = route_config.get("provider", "openai")
-    model_name = route_config.get("model_name", "")
 
     yield _sse_event("start", {"model": model_name, "token_estimate": token_estimate})
 
