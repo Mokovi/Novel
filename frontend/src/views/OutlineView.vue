@@ -1,242 +1,382 @@
 <template>
-  <div class="outline">
-    <h1 class="page-title">大纲视图</h1>
-
-    <!-- Toolbar -->
-    <div class="toolbar">
-      <n-button type="primary" @click="showCreateVolume = true">创建卷</n-button>
-      <n-button @click="showCreateArc = true">创建节</n-button>
-      <n-button @click="showCreateChapter = true">创建章节</n-button>
-      <n-divider vertical />
-      <n-button @click="handleBatchDownload">批量下载</n-button>
-    </div>
-
-    <!-- ═══ Book Section ═══ -->
-    <div class="book-section">
-      <div class="section-header">
-        <h2 class="section-title">全书大纲</h2>
-        <div class="section-header-actions">
-          <n-button
-            size="tiny"
-            @click="showBookOutline = !showBookOutline"
-          >{{ showBookOutline ? '收起' : '展开' }}</n-button>
-          <n-button
-            v-if="showBookOutline"
-            size="tiny"
-            :type="outlineMode.book === 'preview' ? 'primary' : 'default'"
-            @click="toggleOutlineMode('book')"
-          >{{ outlineMode.book === 'preview' ? '编辑' : '预览' }}</n-button>
-          <n-button
-            size="small"
-            :loading="bookGenerating"
-            @click="prepareGenerateBook"
-          >生成全书大纲</n-button>
+  <div class="outline-container">
+    <!-- ═══ Glassmorphism Floating Toolbar ═══ -->
+    <div class="toolbar-wrapper">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <h1 class="page-title">大纲</h1>
+          <span class="page-subtitle">全书结构总览</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="tb-btn tb-btn-primary" @click="showCreateVolume = true">
+            <span class="tb-icon">＋</span>
+            <span>新建卷</span>
+          </button>
+          <button class="tb-btn" @click="showCreateArc = true">
+            <span class="tb-icon">⊕</span>
+            <span>新建节</span>
+          </button>
+          <button class="tb-btn" @click="showCreateChapter = true">
+            <span class="tb-icon">📄</span>
+            <span>新建章节</span>
+          </button>
+          <div class="tb-divider" />
+          <button class="tb-btn tb-btn-ghost" @click="handleBatchDownload">
+            <span class="tb-icon">↓</span>
+            <span>批量下载</span>
+          </button>
         </div>
       </div>
-      <div v-if="showBookOutline && bookOutline" class="outline-text">
-        <div v-if="outlineMode.book === 'preview'" class="markdown-preview" v-html="renderMarkdown(bookOutline)" />
-        <n-input
-          v-else
-          v-model:value="bookOutline"
-          type="textarea"
-          :autosize="{ minRows: 3, maxRows: 12 }"
-          placeholder="全书大纲内容..."
-        />
-        <div v-if="outlineMode.book === 'edit'" class="outline-actions">
-          <n-button size="tiny" @click="handleSaveBookOutline">保存</n-button>
-        </div>
-      </div>
-      <p v-if="!showBookOutline && bookOutline" class="outline-empty">全书大纲已生成（点击展开查看）</p>
-      <p v-if="!bookOutline" class="outline-empty">尚未生成全书大纲</p>
     </div>
 
-    <!-- Volume list -->
-    <div v-if="store.volumes.length" class="volume-list">
-      <div
-        v-for="vol in store.volumes"
-        :key="vol.id"
-        class="volume-section"
-      >
-        <!-- Volume header -->
-        <div class="volume-header">
-          <h2 class="volume-title">
-            <span class="volume-title-text">{{ vol.title }}</span>
-          </h2>
-          <div class="volume-meta">
-            <span class="chapter-count">{{ chaptersByVolume(vol.id).length }} 章</span>
-            <n-button size="tiny" @click="showVolumeOutline[vol.id] = !showVolumeOutline[vol.id]">
-              {{ showVolumeOutline[vol.id] ? '收起' : '卷纲' }}
-            </n-button>
-            <n-button size="tiny" :loading="volGenerating[vol.id]" @click="prepareGenerateVolume(vol)">
-              生成卷纲
-            </n-button>
-            <n-popconfirm @positive-click="handleDeleteVolume(vol.id)">
-              <template #trigger>
-                <n-button size="tiny" text class="delete-btn" @click.stop>删除卷</n-button>
-              </template>
-              确定删除此卷及其下所有章节？
-            </n-popconfirm>
+    <!-- ═══ Book Outline — Preface Card ═══ -->
+    <div class="preface-card">
+      <div class="preface-header" @click="showBookOutline = !showBookOutline">
+        <div class="preface-title-group">
+          <div class="preface-icon">📖</div>
+          <div>
+            <h2 class="preface-title">全书大纲</h2>
+            <span class="preface-meta">总体规划 · 故事蓝图</span>
           </div>
         </div>
-
-        <p v-if="vol.description" class="volume-desc">{{ vol.description }}</p>
-
-        <!-- Volume outline fold panel -->
-        <div v-if="showVolumeOutline[vol.id]" class="outline-text">
-          <div class="outline-toolbar">
-            <n-button
-              size="tiny"
-              :type="outlineMode[`vol_${vol.id}`] === 'preview' ? 'primary' : 'default'"
-              @click="toggleOutlineMode(`vol_${vol.id}`)"
-            >{{ outlineMode[`vol_${vol.id}`] === 'preview' ? '编辑' : '预览' }}</n-button>
-          </div>
-          <div v-if="outlineMode[`vol_${vol.id}`] === 'preview'" class="markdown-preview" v-html="renderMarkdown(volOutlines[vol.id])" />
-          <n-input
-            v-else
-            v-model:value="volOutlines[vol.id]"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 8 }"
-            placeholder="卷纲内容..."
-          />
-          <div v-if="outlineMode[`vol_${vol.id}`] === 'edit'" class="outline-actions">
-            <n-button size="tiny" @click="handleSaveVolumeOutline(vol)">保存</n-button>
-          </div>
-        </div>
-
-        <!-- Arc sections -->
-        <div v-if="arcsByVolume(vol.id).length" class="arc-list">
-          <div
-            v-for="arc in arcsByVolume(vol.id)"
-            :key="arc.id"
-            class="arc-section"
+        <div class="preface-actions">
+          <span class="preface-badge" :class="{ active: showBookOutline }">
+            {{ showBookOutline ? '展开中' : '已收起' }}
+          </span>
+          <button
+            v-if="showBookOutline && bookOutline"
+            class="preface-toggle"
+            :class="{ active: outlineMode.book === 'preview' }"
+            @click.stop="toggleOutlineMode('book')"
           >
-            <div class="arc-header">
-              <span class="arc-title">{{ arc.title }}</span>
-              <div class="arc-meta">
-                <span class="chapter-count">{{ chaptersByArc(arc.id).length }} 章</span>
-                <n-button size="tiny" @click="showArcOutline[arc.id] = !showArcOutline[arc.id]">
-                  {{ showArcOutline[arc.id] ? '收起' : '节纲' }}
-                </n-button>
-                <n-button size="tiny" :loading="arcGenerating[arc.id]" @click="prepareGenerateArc(arc)">
-                  生成节纲
-                </n-button>
-                <n-popconfirm @positive-click="handleDeleteArc(arc.id)">
-                  <template #trigger>
-                    <n-button size="tiny" text class="delete-btn" @click.stop>删除</n-button>
-                  </template>
-                  确定删除此节？
-                </n-popconfirm>
-              </div>
+            {{ outlineMode.book === 'preview' ? '预览' : '编辑' }}
+          </button>
+          <button
+            class="preface-gen-btn"
+            :class="{ loading: bookGenerating }"
+            :disabled="bookGenerating"
+            @click.stop="prepareGenerateBook"
+          >
+            <span v-if="bookGenerating" class="spin" />
+            <span v-else>✦</span>
+            <span>生成</span>
+          </button>
+          <button class="preface-chevron" :class="{ open: showBookOutline }">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <transition name="outline-slide">
+        <div v-if="showBookOutline" class="preface-body">
+          <div v-if="bookOutline" class="outline-editor">
+            <div v-if="outlineMode.book === 'preview'" class="markdown-body" v-html="renderMarkdown(bookOutline)" />
+            <textarea
+              v-else
+              v-model="bookOutline"
+              class="outline-textarea"
+              placeholder="输入全书大纲内容..."
+              rows="4"
+            />
+            <div v-if="outlineMode.book === 'edit'" class="outline-save-row">
+              <button class="save-btn" @click="handleSaveBookOutline">保存修改</button>
             </div>
-            <p v-if="arc.description" class="arc-desc">{{ arc.description }}</p>
+          </div>
+          <div v-else class="preface-empty">
+            <p>尚未生成全书大纲</p>
+            <p class="preface-empty-hint">点击上方「生成」按钮，AI 将为您构建完整的故事蓝图</p>
+          </div>
+        </div>
+      </transition>
+    </div>
 
-            <!-- Arc outline fold panel -->
-            <div v-if="showArcOutline[arc.id]" class="outline-text">
-              <div class="outline-toolbar">
-                <n-button
-                  size="tiny"
-                  :type="outlineMode[`arc_${arc.id}`] === 'preview' ? 'primary' : 'default'"
-                  @click="toggleOutlineMode(`arc_${arc.id}`)"
-                >{{ outlineMode[`arc_${arc.id}`] === 'preview' ? '编辑' : '预览' }}</n-button>
-              </div>
-              <div v-if="outlineMode[`arc_${arc.id}`] === 'preview'" class="markdown-preview" v-html="renderMarkdown(arcOutlines[arc.id])" />
-              <n-input
-                v-else
-                v-model:value="arcOutlines[arc.id]"
-                type="textarea"
-                :autosize="{ minRows: 2, maxRows: 6 }"
-                placeholder="节纲内容..."
-              />
-              <div v-if="outlineMode[`arc_${arc.id}`] === 'edit'" class="outline-actions">
-                <n-button size="tiny" @click="handleSaveArcOutline(arc)">保存</n-button>
-              </div>
+    <!-- ═══ Volumes ═══ -->
+    <div v-if="store.volumes.length" class="volumes-container">
+      <div
+        v-for="(vol, vIdx) in store.volumes"
+        :key="vol.id"
+        class="volume-card"
+        :style="{ '--v-delay': `${vIdx * 0.08}s` }"
+      >
+        <!-- Volume Header -->
+        <div class="volume-header">
+          <div class="volume-header-top">
+            <div class="volume-title-group" @click="showVolumeOutline[vol.id] = !showVolumeOutline[vol.id]">
+              <div class="volume-number">{{ formatVolumeNum(vIdx) }}</div>
+              <h2 class="volume-title">{{ vol.title }}</h2>
             </div>
-
-            <!-- Chapter cards -->
-            <div v-if="chaptersByArc(arc.id).length" class="chapter-list">
-              <div
-                v-for="ch in chaptersByArc(arc.id)"
-                :key="ch.id"
-                class="chapter-card"
-                :class="[`status-${ch.status}`]"
-                @click="$router.push(`/editor/${ch.id}`)"
+            <div class="volume-header-actions">
+              <div class="volume-stat">
+                <span class="stat-num">{{ chaptersByVolume(vol.id).length }}</span>
+                <span class="stat-label">章</span>
+              </div>
+              <div class="volume-progress">
+                <div class="progress-track">
+                  <div
+                    class="progress-fill"
+                    :style="{ width: volumeProgress(vol.id) + '%' }"
+                  />
+                </div>
+              </div>
+              <button
+                class="vol-btn"
+                @click="showVolumeOutline[vol.id] = !showVolumeOutline[vol.id]"
+                :class="{ active: showVolumeOutline[vol.id] }"
               >
-                <div class="chapter-body">
-                  <h3 class="chapter-title">{{ ch.title }}</h3>
-                  <p v-if="ch.summary || ch.ai_summary" class="chapter-summary">
-                    {{ ch.ai_summary || ch.summary }}
-                  </p>
-                  <div v-if="ch.ai_summary" class="chapter-footer">
-                    <n-tag size="small" type="info">AI 摘要</n-tag>
-                  </div>
-                  <div class="chapter-footer">
-                    <n-tag size="small" :type="statusType(ch.status)">
-                      {{ statusLabel(ch.status) }}
-                    </n-tag>
-                    <span class="word-count">{{ ch.word_count }} 字</span>
-                  </div>
-                </div>
-                <div class="chapter-actions" @click.stop>
-                  <n-button size="tiny" @click="handleGenerateChapter(ch)">生成</n-button>
-                  <n-button size="tiny" @click="handleRegenerateSummary(ch)">重写摘要</n-button>
-                  <n-button size="tiny" @click="handleDownloadChapter(ch)">下载</n-button>
-                  <n-popconfirm @positive-click="handleDeleteChapter(ch.id, ch.volume_id)">
-                    <template #trigger>
-                      <n-button size="tiny" text class="delete-btn">删除</n-button>
-                    </template>
-                    确定删除此章节？
-                  </n-popconfirm>
-                </div>
-              </div>
+                卷纲
+              </button>
+              <button
+                class="vol-btn vol-gen-btn"
+                :class="{ loading: volGenerating[vol.id] }"
+                :disabled="volGenerating[vol.id]"
+                @click="prepareGenerateVolume(vol)"
+              >
+                <span v-if="volGenerating[vol.id]" class="spin" />
+                <span>生成卷纲</span>
+              </button>
+              <button class="vol-btn vol-del-btn" @click="confirmDeleteVolume(vol)">删除</button>
             </div>
-            <div v-else class="empty-chapters">
-              <n-empty description="该节下暂无章节" size="small" />
-            </div>
+          </div>
+          <p v-if="vol.description" class="volume-desc">{{ vol.description }}</p>
+
+          <!-- Decorative divider -->
+          <div class="vol-divider">
+            <span class="vol-divider-ornament">◈</span>
           </div>
         </div>
 
-        <!-- Unassigned chapters -->
-        <div v-if="unassignedChapters(vol.id).length" class="unassigned-section">
-          <div class="unassigned-header">未归属章节</div>
-          <div class="chapter-list">
-            <div
-              v-for="ch in unassignedChapters(vol.id)"
-              :key="ch.id"
-              class="chapter-card"
-              :class="[`status-${ch.status}`]"
-              @click="$router.push(`/editor/${ch.id}`)"
-            >
-              <div class="chapter-body">
-                <h3 class="chapter-title">{{ ch.title }}</h3>
-                <p v-if="ch.summary" class="chapter-summary">{{ ch.summary }}</p>
-                <div class="chapter-footer">
-                  <n-tag size="small" :type="statusType(ch.status)">
-                    {{ statusLabel(ch.status) }}
-                  </n-tag>
-                  <span class="word-count">{{ ch.word_count }} 字</span>
+        <!-- Volume Outline -->
+        <transition name="outline-slide">
+          <div v-if="showVolumeOutline[vol.id]" class="volume-outline">
+            <div v-if="volOutlines[vol.id]" class="outline-editor">
+              <div v-if="outlineMode[`vol_${vol.id}`] === 'preview'" class="markdown-body" v-html="renderMarkdown(volOutlines[vol.id])" />
+              <textarea
+                v-else
+                v-model="volOutlines[vol.id]"
+                class="outline-textarea"
+                placeholder="卷纲内容..."
+                rows="3"
+              />
+              <div v-if="outlineMode[`vol_${vol.id}`] === 'edit'" class="outline-save-row">
+                <button class="save-btn" @click="handleSaveVolumeOutline(vol)">保存修改</button>
+              </div>
+            </div>
+            <div v-else class="volume-outline-empty">
+              <span>尚未生成卷纲</span>
+            </div>
+            <div class="outline-mode-toggle">
+              <button
+                class="mode-btn"
+                :class="{ active: outlineMode[`vol_${vol.id}`] === 'preview' }"
+                @click="outlineMode[`vol_${vol.id}`] = 'preview'"
+              >预览</button>
+              <button
+                class="mode-btn"
+                :class="{ active: outlineMode[`vol_${vol.id}`] === 'edit' }"
+                @click="outlineMode[`vol_${vol.id}`] = 'edit'"
+              >编辑</button>
+            </div>
+          </div>
+        </transition>
+
+        <!-- Arcs + Chapters Tree -->
+        <div class="arcs-tree">
+          <!-- Arcs -->
+          <div
+            v-for="(arc, aIdx) in arcsByVolume(vol.id)"
+            :key="arc.id"
+            class="arc-node"
+            :style="{ '--a-delay': `${aIdx * 0.06}s` }"
+          >
+            <div class="arc-connector">
+              <div class="arc-line" />
+              <div class="arc-dot" />
+            </div>
+            <div class="arc-content">
+              <!-- Arc Header -->
+              <div class="arc-header" @click="showArcOutline[arc.id] = !showArcOutline[arc.id]">
+                <div class="arc-title-group">
+                  <span class="arc-num">{{ formatArcNum(aIdx) }}</span>
+                  <span class="arc-title">{{ arc.title }}</span>
+                  <span class="arc-chapter-count">{{ chaptersByArc(arc.id).length }}章</span>
+                </div>
+                <div class="arc-actions">
+                  <button
+                    class="arc-btn"
+                    :class="{ active: showArcOutline[arc.id] }"
+                    @click.stop="showArcOutline[arc.id] = !showArcOutline[arc.id]"
+                  >
+                    节纲
+                  </button>
+                  <button
+                    class="arc-btn arc-gen-btn"
+                    :class="{ loading: arcGenerating[arc.id] }"
+                    :disabled="arcGenerating[arc.id]"
+                    @click.stop="prepareGenerateArc(arc)"
+                  >
+                    <span v-if="arcGenerating[arc.id]" class="spin" />
+                    <span>生成</span>
+                  </button>
+                  <button
+                    class="arc-btn arc-del-btn"
+                    @click.stop="confirmDeleteArc(arc)"
+                  >删除</button>
                 </div>
               </div>
-              <div class="chapter-actions" @click.stop>
-                <n-button size="tiny" @click="handleGenerateChapter(ch)">生成</n-button>
-                <n-button size="tiny" @click="handleDownloadChapter(ch)">下载</n-button>
-                <n-popconfirm @positive-click="handleDeleteChapter(ch.id, ch.volume_id)">
-                  <template #trigger>
-                    <n-button size="tiny" text class="delete-btn">删除</n-button>
-                  </template>
-                  确定删除此章节？
-                </n-popconfirm>
+
+              <p v-if="arc.description" class="arc-desc">{{ arc.description }}</p>
+
+              <!-- Arc Outline -->
+              <transition name="outline-slide">
+                <div v-if="showArcOutline[arc.id]" class="arc-outline-section">
+                  <div v-if="arcOutlines[arc.id]" class="outline-editor">
+                    <div v-if="outlineMode[`arc_${arc.id}`] === 'preview'" class="markdown-body" v-html="renderMarkdown(arcOutlines[arc.id])" />
+                    <textarea
+                      v-else
+                      v-model="arcOutlines[arc.id]"
+                      class="outline-textarea"
+                      placeholder="节纲内容..."
+                      rows="3"
+                    />
+                    <div v-if="outlineMode[`arc_${arc.id}`] === 'edit'" class="outline-save-row">
+                      <button class="save-btn" @click="handleSaveArcOutline(arc)">保存修改</button>
+                    </div>
+                  </div>
+                  <div v-else class="arc-outline-empty">
+                    <span>尚未生成节纲</span>
+                  </div>
+                  <div class="outline-mode-toggle">
+                    <button
+                      class="mode-btn"
+                      :class="{ active: outlineMode[`arc_${arc.id}`] === 'preview' }"
+                      @click="outlineMode[`arc_${arc.id}`] = 'preview'"
+                    >预览</button>
+                    <button
+                      class="mode-btn"
+                      :class="{ active: outlineMode[`arc_${arc.id}`] === 'edit' }"
+                      @click="outlineMode[`arc_${arc.id}`] = 'edit'"
+                    >编辑</button>
+                  </div>
+                </div>
+              </transition>
+
+              <!-- Chapter Cards -->
+              <div v-if="chaptersByArc(arc.id).length" class="chapter-list">
+                <div
+                  v-for="(ch, cIdx) in chaptersByArc(arc.id)"
+                  :key="ch.id"
+                  class="chapter-card"
+                  :class="`status-${ch.status}`"
+                  :style="{ '--c-delay': `${cIdx * 0.04}s` }"
+                  @click="$router.push(`/editor/${ch.id}`)"
+                >
+                  <div class="chapter-strip" />
+                  <div class="chapter-inner">
+                    <div class="chapter-main">
+                      <h3 class="chapter-title">{{ ch.title }}</h3>
+                      <p v-if="ch.ai_summary || ch.summary" class="chapter-summary">
+                        {{ ch.ai_summary || ch.summary }}
+                      </p>
+                    </div>
+                    <div class="chapter-side">
+                      <span class="chapter-status-tag" :class="`tag-${ch.status}`">
+                        {{ statusLabel(ch.status) }}
+                      </span>
+                      <span class="chapter-wordcount">{{ ch.word_count }} 字</span>
+                    </div>
+                    <div class="chapter-actions" @click.stop>
+                      <button class="ch-action-btn" @click="handleGenerateChapter(ch)">
+                        <span class="ch-action-icon">▶</span>生成
+                      </button>
+                      <button class="ch-action-btn" @click="handleRegenerateSummary(ch)">
+                        <span class="ch-action-icon">↻</span>摘要
+                      </button>
+                      <button class="ch-action-btn" @click="handleDownloadChapter(ch)">
+                        <span class="ch-action-icon">↓</span>下载
+                      </button>
+                      <button class="ch-action-btn ch-action-danger" @click="confirmDeleteChapter(ch)">
+                        <span class="ch-action-icon">✕</span>删除
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="chapter-empty">
+                <span>该节下暂无章节</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Unassigned Chapters -->
+          <div
+            v-if="unassignedChapters(vol.id).length"
+            class="arc-node"
+          >
+            <div class="arc-connector">
+              <div class="arc-line" />
+              <div class="arc-dot arc-dot-muted" />
+            </div>
+            <div class="arc-content">
+              <div class="arc-header">
+                <div class="arc-title-group">
+                  <span class="arc-num">—</span>
+                  <span class="arc-title arc-title-muted">未归属章节</span>
+                </div>
+              </div>
+              <div class="chapter-list">
+                <div
+                  v-for="(ch, cIdx) in unassignedChapters(vol.id)"
+                  :key="ch.id"
+                  class="chapter-card"
+                  :class="`status-${ch.status}`"
+                  :style="{ '--c-delay': `${cIdx * 0.04}s` }"
+                  @click="$router.push(`/editor/${ch.id}`)"
+                >
+                  <div class="chapter-strip" />
+                  <div class="chapter-inner">
+                    <div class="chapter-main">
+                      <h3 class="chapter-title">{{ ch.title }}</h3>
+                      <p v-if="ch.summary" class="chapter-summary">{{ ch.summary }}</p>
+                    </div>
+                    <div class="chapter-side">
+                      <span class="chapter-status-tag" :class="`tag-${ch.status}`">
+                        {{ statusLabel(ch.status) }}
+                      </span>
+                      <span class="chapter-wordcount">{{ ch.word_count }} 字</span>
+                    </div>
+                    <div class="chapter-actions" @click.stop>
+                      <button class="ch-action-btn" @click="handleGenerateChapter(ch)">
+                        <span class="ch-action-icon">▶</span>生成
+                      </button>
+                      <button class="ch-action-btn" @click="handleDownloadChapter(ch)">
+                        <span class="ch-action-icon">↓</span>下载
+                      </button>
+                      <button class="ch-action-btn ch-action-danger" @click="confirmDeleteChapter(ch)">
+                        <span class="ch-action-icon">✕</span>删除
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-    <div v-else class="empty-volume">
-      <n-empty description="暂无卷，请先创建" />
+
+    <!-- Empty state -->
+    <div v-else class="empty-state">
+      <div class="empty-icon">📝</div>
+      <h3 class="empty-title">开始构建您的小说</h3>
+      <p class="empty-desc">创建第一个卷，开启您的创作之旅</p>
+      <button class="empty-cta" @click="showCreateVolume = true">
+        <span>＋</span> 创建第一卷
+      </button>
     </div>
 
-    <!-- Create Volume Modal -->
-    <n-modal v-model:show="showCreateVolume" title="创建卷" preset="card" style="width: 480px">
+    <!-- ═══ Create Volume Modal ═══ -->
+    <n-modal v-model:show="showCreateVolume" title="新建卷" preset="card" style="width: 480px; border-radius: 12px">
       <n-form>
         <n-form-item label="卷标题">
           <n-input v-model:value="newVolume.title" placeholder="如：第一卷" />
@@ -246,12 +386,15 @@
         </n-form-item>
       </n-form>
       <template #footer>
-        <n-button type="primary" @click="handleCreateVolume">创建</n-button>
+        <div class="modal-footer">
+          <n-button @click="showCreateVolume = false">取消</n-button>
+          <n-button type="primary" @click="handleCreateVolume">创建</n-button>
+        </div>
       </template>
     </n-modal>
 
     <!-- Create Arc Modal -->
-    <n-modal v-model:show="showCreateArc" title="创建节" preset="card" style="width: 520px">
+    <n-modal v-model:show="showCreateArc" title="新建节" preset="card" style="width: 520px">
       <n-form>
         <n-form-item label="所属卷">
           <n-select
@@ -268,12 +411,15 @@
         </n-form-item>
       </n-form>
       <template #footer>
-        <n-button type="primary" @click="handleCreateArc">创建</n-button>
+        <div class="modal-footer">
+          <n-button @click="showCreateArc = false">取消</n-button>
+          <n-button type="primary" @click="handleCreateArc">创建</n-button>
+        </div>
       </template>
     </n-modal>
 
     <!-- Create Chapter Modal -->
-    <n-modal v-model:show="showCreateChapter" title="创建章节" preset="card" style="width: 520px">
+    <n-modal v-model:show="showCreateChapter" title="新建章节" preset="card" style="width: 520px">
       <n-form>
         <n-form-item label="所属卷">
           <n-select
@@ -299,14 +445,16 @@
         </n-form-item>
       </n-form>
       <template #footer>
-        <n-button type="primary" @click="handleCreateChapter">创建</n-button>
+        <div class="modal-footer">
+          <n-button @click="showCreateChapter = false">取消</n-button>
+          <n-button type="primary" @click="handleCreateChapter">创建</n-button>
+        </div>
       </template>
     </n-modal>
 
     <!-- ═══ SSE Generation Output Modal ═══ -->
     <n-modal v-model:show="showGenOutput" :mask-closable="false" style="width: 720px">
-      <n-card :title="genTitle" style="max-height: 80vh; overflow-y: auto">
-        <!-- User prompt input (shown when idle) -->
+      <n-card :title="genTitle" style="max-height: 80vh; overflow-y: auto; border-radius: 12px">
         <div v-if="genPhase === 'idle'" class="gen-prompt-section">
           <n-input
             v-model:value="userPrompt"
@@ -315,20 +463,12 @@
             placeholder="补充提示词（可选）：输入您对本次大纲生成的特定要求..."
           />
         </div>
-
-        <!-- Generation output (shown when generating or done) -->
         <div v-if="genPhase !== 'idle'" class="gen-output">
           <p v-if="genModel" class="gen-meta">模型: {{ genModel }} | 预估: {{ genTokens }} tokens</p>
-
-          <!-- During generation: raw streaming text -->
           <div v-if="genPhase === 'generating'" class="gen-text">{{ genOutput }}</div>
-
-          <!-- After done: rendered markdown preview -->
-          <div v-else class="gen-preview" v-html="renderMarkdown(genOutput)" />
-
+          <div v-else class="markdown-body" v-html="renderMarkdown(genOutput)" />
           <n-spin v-if="genRunning" size="small" />
         </div>
-
         <template #action>
           <n-space justify="end">
             <template v-if="genPhase === 'idle'">
@@ -344,6 +484,17 @@
           </n-space>
         </template>
       </n-card>
+    </n-modal>
+
+    <!-- ═══ Confirm Delete Dialog ═══ -->
+    <n-modal v-model:show="showDeleteConfirm" title="确认删除" preset="card" style="width: 400px">
+      <p style="margin: 0; color: var(--color-text-secondary);">{{ deleteMessage }}</p>
+      <template #footer>
+        <div class="modal-footer">
+          <n-button @click="showDeleteConfirm = false">取消</n-button>
+          <n-button type="error" @click="executeDelete">删除</n-button>
+        </div>
+      </template>
     </n-modal>
   </div>
 </template>
@@ -414,6 +565,41 @@ const bookGenerating = ref(false)
 const volGenerating = reactive({})
 const arcGenerating = reactive({})
 
+// ── Delete confirm state ──
+const showDeleteConfirm = ref(false)
+const deleteMessage = ref('')
+let pendingDelete = null
+
+function confirmDeleteVolume(vol) {
+  deleteMessage.value = `确定删除「${vol.title}」及其下所有章节？此操作不可撤销。`
+  pendingDelete = async () => {
+    await handleDeleteVolume(vol.id)
+  }
+  showDeleteConfirm.value = true
+}
+
+function confirmDeleteArc(arc) {
+  deleteMessage.value = `确定删除节「${arc.title}」？其下的章节将变为未归属状态。`
+  pendingDelete = async () => {
+    await handleDeleteArc(arc.id)
+  }
+  showDeleteConfirm.value = true
+}
+
+function confirmDeleteChapter(ch) {
+  deleteMessage.value = `确定删除章节「${ch.title}」？此操作不可撤销。`
+  pendingDelete = async () => {
+    await handleDeleteChapter(ch.id, ch.volume_id)
+  }
+  showDeleteConfirm.value = true
+}
+
+async function executeDelete() {
+  if (pendingDelete) await pendingDelete()
+  showDeleteConfirm.value = false
+  pendingDelete = null
+}
+
 const volumeOptions = computed(() =>
   store.volumes.map(v => ({ label: v.title, value: v.id }))
 )
@@ -442,6 +628,23 @@ const statusType = (s) =>
 
 const statusLabel = (s) =>
   ({ pending: '待生成', generating: '生成中', completed: '已完成' }[s] || s)
+
+function formatVolumeNum(idx) {
+  const nums = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+  return nums[idx] || `${idx + 1}`
+}
+
+function formatArcNum(idx) {
+  const nums = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+  return `第${nums[idx] || idx + 1}节`
+}
+
+function volumeProgress(volId) {
+  const chs = chaptersByVolume(volId)
+  if (!chs.length) return 0
+  const done = chs.filter(c => c.status === 'completed').length
+  return Math.round((done / chs.length) * 100)
+}
 
 function renderMarkdown(text) {
   if (!text) return ''
@@ -615,7 +818,6 @@ function prepareGenerateArc(arc) {
 watch(showGenOutput, (val) => {
   if (!val) {
     bookGenerating.value = false
-    // clear all vol/arc generating states
     for (const k of Object.keys(volGenerating)) volGenerating[k] = false
     for (const k of Object.keys(arcGenerating)) arcGenerating[k] = false
   }
@@ -650,7 +852,6 @@ onMounted(async () => {
   ])
   bookOutline.value = settingsStore.bookOutline
 
-  // Initialize outline displays (collapsed by default) and store values
   for (const vol of store.volumes) {
     showVolumeOutline[vol.id] = false
     volOutlines[vol.id] = vol.outline || ''
@@ -665,460 +866,1099 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.outline {
-  max-width: 960px;
+/* ═══════════════════════════════════════════════
+   OUTLINE VIEW — "Author's Archive"
+   Editorial magazine aesthetic with literary warmth
+   ═══════════════════════════════════════════════ */
+
+.outline-container {
+  max-width: 1000px;
   margin: 0 auto;
+  padding-bottom: 80px;
+}
+
+/* ── Glassmorphism Toolbar ── */
+.toolbar-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 12px 0 20px;
+  margin: -12px 0 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: rgba(250, 245, 237, 0.75);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(232, 224, 213, 0.6);
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(26, 22, 20, 0.06);
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
 }
 
 .page-title {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--color-text-primary);
-  margin: 0 0 20px;
+  margin: 0;
+  letter-spacing: 2px;
 }
 
-/* Toolbar */
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--color-border);
+.page-subtitle {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
 }
 
-/* Book section */
-.book-section {
-  margin-bottom: 28px;
-  padding: 16px;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-accent);
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.section-header-actions {
+.toolbar-right {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.section-title {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--color-accent-dark);
-  margin: 0;
+.tb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-ui);
 }
 
-/* Volume */
-.volume-section {
-  margin-bottom: 28px;
-  animation: fade-in-up 0.4s ease both;
+.tb-btn:hover {
+  border-color: var(--color-accent);
+  background: rgba(201, 169, 78, 0.06);
 }
 
-.volume-header {
+.tb-btn-primary {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.tb-btn-primary:hover {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent-light);
+}
+
+.tb-btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.tb-btn-ghost:hover {
+  background: rgba(201, 169, 78, 0.08);
+  color: var(--color-text-primary);
+}
+
+.tb-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tb-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--color-border);
+  margin: 0 6px;
+}
+
+/* ── Preface Card (全书大纲) ── */
+.preface-card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  margin-bottom: 24px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-base);
+}
+.preface-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.preface-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 0 6px;
+  padding: 16px 20px;
+  cursor: pointer;
+  user-select: none;
 }
 
-.volume-title {
-  margin: 0;
+.preface-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.volume-title-text {
-  font-family: var(--font-display);
+.preface-icon {
   font-size: 22px;
+  line-height: 1;
+}
+
+.preface-title {
+  font-family: var(--font-display);
+  font-size: 16px;
   font-weight: 700;
-  color: var(--color-accent-dark);
+  color: var(--color-text-primary);
+  margin: 0;
   letter-spacing: 1px;
 }
 
-.volume-meta {
+.preface-meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+}
+
+.preface-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
-.chapter-count {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.volume-desc {
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  margin: 0 0 12px;
-  line-height: 1.5;
-}
-
-/* Outline text */
-.outline-text {
-  margin: 8px 0 12px;
-}
-
-.outline-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 6px;
-}
-
-.outline-actions {
-  margin-top: 6px;
-}
-
-.outline-empty {
-  font-size: 13px;
+.preface-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--color-border-light);
   color: var(--color-text-muted);
-  margin: 0;
+  font-family: var(--font-ui);
+  transition: all var(--transition-fast);
 }
-
-/* Markdown preview */
-.markdown-preview {
-  padding: 12px 16px;
-  background: var(--color-bg-page);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--color-text-primary);
-  overflow-x: auto;
-}
-
-.markdown-preview :deep(h1),
-.markdown-preview :deep(h2),
-.markdown-preview :deep(h3),
-.markdown-preview :deep(h4) {
-  font-family: var(--font-display);
-  font-weight: 600;
-  margin: 1em 0 0.5em;
+.preface-badge.active {
+  background: rgba(201, 169, 78, 0.12);
   color: var(--color-accent-dark);
 }
 
-.markdown-preview :deep(h1) { font-size: 1.4em; }
-.markdown-preview :deep(h2) { font-size: 1.2em; }
-.markdown-preview :deep(h3) { font-size: 1.1em; }
-
-.markdown-preview :deep(p) {
-  margin: 0 0 0.6em;
-}
-
-.markdown-preview :deep(ul),
-.markdown-preview :deep(ol) {
-  padding-left: 1.5em;
-  margin: 0.4em 0;
-}
-
-.markdown-preview :deep(li) {
-  margin: 0.2em 0;
-}
-
-.markdown-preview :deep(strong) {
-  font-weight: 600;
-}
-
-.markdown-preview :deep(code) {
-  background: rgba(201, 169, 78, 0.1);
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 0.9em;
-}
-
-.markdown-preview :deep(pre) {
-  background: var(--color-bg-page);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  padding: 12px;
-  overflow-x: auto;
-}
-
-.markdown-preview :deep(pre code) {
-  background: none;
-  padding: 0;
-}
-
-.markdown-preview :deep(hr) {
-  border: none;
-  border-top: 1px solid var(--color-border);
-  margin: 1em 0;
-}
-
-.markdown-preview :deep(blockquote) {
-  border-left: 3px solid var(--color-accent);
-  margin: 0.5em 0;
-  padding: 4px 12px;
-  color: var(--color-text-secondary);
-  background: rgba(201, 169, 78, 0.04);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-}
-
-.markdown-preview :deep(table) {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 0.5em 0;
-}
-
-.markdown-preview :deep(th),
-.markdown-preview :deep(td) {
+.preface-toggle {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
   border: 1px solid var(--color-border);
-  padding: 6px 10px;
-  text-align: left;
+  background: #fff;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all var(--transition-fast);
+}
+.preface-toggle:hover,
+.preface-toggle.active {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+}
+.preface-toggle.active {
+  background: rgba(201, 169, 78, 0.08);
 }
 
-.markdown-preview :deep(th) {
+.preface-gen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-accent);
+  background: rgba(201, 169, 78, 0.08);
+  color: var(--color-accent-dark);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+.preface-gen-btn:hover {
+  background: var(--color-accent);
+  color: #fff;
+}
+.preface-gen-btn.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.preface-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: transform var(--transition-base);
+}
+.preface-chevron.open {
+  transform: rotate(180deg);
+}
+
+.preface-body {
+  border-top: 1px solid var(--color-border-light);
+  padding: 16px 20px;
   background: var(--color-bg-page);
-  font-weight: 600;
 }
 
-/* Arc */
-.arc-list {
-  margin: 12px 0 0 16px;
-  border-left: 2px solid var(--color-border-light);
-  padding-left: 16px;
+.preface-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-family: var(--font-ui);
+}
+.preface-empty-hint {
+  font-size: 12px;
+  margin-top: 6px;
 }
 
-.arc-section {
-  margin-bottom: 16px;
-  animation: fade-in-up 0.35s ease both;
+/* ── Outline Editor Shared ── */
+.outline-editor {
+  position: relative;
+}
+
+.outline-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text-primary);
+  font-family: var(--font-editor);
+  font-size: 14px;
+  line-height: 1.7;
+  resize: vertical;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+.outline-textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(201, 169, 78, 0.12);
+}
+
+.outline-save-row {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.save-btn {
+  padding: 5px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--color-accent);
+  border-radius: 6px;
+  background: var(--color-accent);
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all var(--transition-fast);
+}
+.save-btn:hover {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent-light);
+}
+
+.outline-mode-toggle {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.mode-btn {
+  padding: 2px 10px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all var(--transition-fast);
+}
+.mode-btn.active {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+  background: rgba(201, 169, 78, 0.08);
+}
+
+/* ── Volumes Container ── */
+.volumes-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Volume Card ── */
+.volume-card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  animation: fade-in-up 0.5s ease both;
+  animation-delay: var(--v-delay, 0s);
+  transition: box-shadow var(--transition-base);
+}
+.volume-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.volume-header {
+  padding: 20px 24px 0;
+}
+
+.volume-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.volume-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+
+.volume-number {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--color-accent);
+  line-height: 1;
+  opacity: 0.5;
+  letter-spacing: 2px;
+}
+
+.volume-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+  letter-spacing: 1px;
+}
+
+.volume-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.volume-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.stat-num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-family: var(--font-display);
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+}
+
+.volume-progress {
+  width: 60px;
+}
+
+.progress-track {
+  height: 4px;
+  background: var(--color-border-light);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 2px;
+  transition: width var(--transition-slow);
+}
+
+.vol-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+.vol-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+}
+.vol-btn.active {
+  background: rgba(201, 169, 78, 0.08);
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+}
+
+.vol-gen-btn {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+  background: rgba(201, 169, 78, 0.06);
+}
+.vol-gen-btn:hover {
+  background: var(--color-accent);
+  color: #fff;
+}
+.vol-gen-btn.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.vol-del-btn {
+  color: var(--color-text-muted);
+  border-color: transparent;
+  background: transparent;
+}
+.vol-del-btn:hover {
+  color: var(--color-error) !important;
+  border-color: var(--color-error) !important;
+  background: rgba(196, 90, 90, 0.06) !important;
+}
+
+.volume-desc {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 6px 0 0 44px;
+  line-height: 1.5;
+  font-family: var(--font-ui);
+}
+
+.vol-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 12px 0 0;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--color-border) 15%,
+    var(--color-border) 85%,
+    transparent
+  );
+  position: relative;
+}
+.vol-divider-ornament {
+  position: absolute;
+  font-size: 10px;
+  color: var(--color-accent);
+  background: #fff;
+  padding: 0 12px;
+  line-height: 1;
+}
+
+/* ── Volume Outline ── */
+.volume-outline {
+  padding: 12px 24px 16px;
+  background: var(--color-bg-page);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.volume-outline-empty {
+  text-align: center;
+  padding: 12px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+/* ── Arcs Tree ── */
+.arcs-tree {
+  padding: 8px 24px 20px;
+}
+
+.arc-node {
+  display: flex;
+  gap: 14px;
+  animation: fade-in-up 0.4s ease both;
+  animation-delay: var(--a-delay, 0s);
+}
+
+.arc-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 12px;
+  flex-shrink: 0;
+  padding-top: 14px;
+}
+
+.arc-line {
+  width: 2px;
+  flex: 1;
+  min-height: 100%;
+  background: linear-gradient(to bottom, var(--color-accent), var(--color-border-light));
+  opacity: 0.4;
+}
+
+.arc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--color-accent);
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.arc-dot-muted {
+  background: var(--color-text-muted);
+  box-shadow: 0 0 0 2px var(--color-text-muted);
+}
+
+.arc-content {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 16px;
 }
 
 .arc-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
+  padding: 8px 12px;
+  margin-left: -12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.arc-header:hover {
+  background: rgba(201, 169, 78, 0.04);
+}
+
+.arc-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.arc-num {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--color-accent);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .arc-title {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--color-text-primary);
+  letter-spacing: 0.5px;
 }
 
-.arc-meta {
+.arc-title-muted {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.arc-chapter-count {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  padding: 1px 6px;
+  background: var(--color-border-light);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.arc-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.arc-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.arc-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+}
+.arc-btn.active {
+  background: rgba(201, 169, 78, 0.08);
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+}
+
+.arc-gen-btn {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+  background: rgba(201, 169, 78, 0.06);
+}
+.arc-gen-btn:hover {
+  background: var(--color-accent);
+  color: #fff;
+}
+.arc-gen-btn.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.arc-del-btn {
+  color: var(--color-text-muted);
+  border-color: transparent;
+  background: transparent;
+}
+.arc-del-btn:hover {
+  color: var(--color-error) !important;
+  border-color: var(--color-error) !important;
+  background: rgba(196, 90, 90, 0.06) !important;
 }
 
 .arc-desc {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--color-text-secondary);
-  margin: 0 0 8px;
+  margin: 2px 0 8px 0;
   line-height: 1.5;
+  font-family: var(--font-ui);
+  padding: 0 12px;
 }
 
-/* Unassigned */
-.unassigned-section {
-  margin: 12px 0 0 16px;
-  padding-left: 16px;
-}
-
-.unassigned-header {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  margin-bottom: 8px;
-  padding: 4px 8px;
+/* Arc Outline */
+.arc-outline-section {
+  padding: 10px 12px;
+  margin: 6px 0 10px;
   background: var(--color-bg-page);
-  border-radius: var(--radius-sm);
-  display: inline-block;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-light);
 }
 
-/* Chapter list */
+.arc-outline-empty {
+  text-align: center;
+  padding: 8px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-family: var(--font-ui);
+}
+
+/* ── Chapter List ── */
 .chapter-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  padding: 4px 0;
 }
 
 .chapter-card {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  background: var(--color-bg-card);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
+  border-radius: 10px;
+  overflow: hidden;
   cursor: pointer;
-  border-left: 3px solid var(--color-border);
-  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+  background: #fff;
+  transition: all var(--transition-fast);
   animation: fade-in-up 0.35s ease both;
+  animation-delay: var(--c-delay, 0s);
 }
-
 .chapter-card:hover {
-  background: rgba(201, 169, 78, 0.04);
-  box-shadow: var(--shadow-sm);
+  border-color: var(--color-accent);
+  box-shadow: 0 4px 12px rgba(201, 169, 78, 0.1);
+  transform: translateX(3px);
+}
+.chapter-card:active {
+  transform: translateX(1px);
 }
 
-.chapter-card.status-pending {
-  border-left-color: var(--color-accent);
+.chapter-strip {
+  width: 4px;
+  flex-shrink: 0;
+  background: var(--color-border);
+  transition: background var(--transition-base);
+}
+.chapter-card.status-pending .chapter-strip {
+  background: var(--color-accent);
+}
+.chapter-card.status-generating .chapter-strip {
+  background: var(--color-warning);
+}
+.chapter-card.status-completed .chapter-strip {
+  background: var(--color-success);
 }
 
-.chapter-card.status-generating {
-  border-left-color: var(--color-warning);
+.chapter-inner {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  min-width: 0;
 }
 
-.chapter-card.status-completed {
-  border-left-color: var(--color-success);
-}
-
-.chapter-body {
+.chapter-main {
   flex: 1;
   min-width: 0;
 }
 
 .chapter-title {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--color-text-primary);
-  margin: 0 0 4px;
+  margin: 0 0 2px;
+  letter-spacing: 0.3px;
 }
 
 .chapter-summary {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--color-text-secondary);
-  margin: 0 0 8px;
-  line-height: 1.5;
+  margin: 0;
+  line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
+  font-family: var(--font-ui);
 }
 
-.chapter-footer {
+.chapter-side {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 60px;
 }
 
-.word-count {
-  font-size: 12px;
+.chapter-status-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--font-ui);
+}
+.tag-pending {
+  background: rgba(201, 169, 78, 0.1);
+  color: var(--color-accent-dark);
+}
+.tag-generating {
+  background: rgba(212, 167, 78, 0.1);
+  color: var(--color-warning);
+}
+.tag-completed {
+  background: rgba(106, 171, 122, 0.1);
+  color: var(--color-success);
+}
+
+.chapter-wordcount {
+  font-size: 11px;
   color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  white-space: nowrap;
 }
 
 .chapter-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
   flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+.chapter-card:hover .chapter-actions {
+  opacity: 1;
 }
 
-.delete-btn {
-  color: var(--color-text-muted) !important;
-  font-size: 12px;
-}
-
-.delete-btn:hover {
-  color: var(--color-error) !important;
-}
-
-.empty-chapters {
-  padding: 12px 0;
-}
-
-.empty-volume {
-  margin-top: 60px;
-}
-
-/* Generation modal */
-.gen-prompt-section {
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.gen-output {
-  min-height: 150px;
-}
-
-.gen-meta {
-  font-size: 12px;
+.ch-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: #fff;
   color: var(--color-text-secondary);
-  margin: 0 0 12px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.ch-action-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+  background: rgba(201, 169, 78, 0.06);
 }
 
-.gen-text {
-  white-space: pre-wrap;
-  font-size: 14px;
-  line-height: 1.6;
+.ch-action-icon {
+  font-size: 9px;
+  line-height: 1;
+}
+
+.ch-action-danger:hover {
+  border-color: var(--color-error) !important;
+  color: var(--color-error) !important;
+  background: rgba(196, 90, 90, 0.06) !important;
+}
+
+.chapter-empty {
+  text-align: center;
+  padding: 12px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-family: var(--font-ui);
+}
+
+/* ── Empty State ── */
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  animation: fade-in-up 0.6s ease both;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  line-height: 1;
+}
+
+.empty-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
   color: var(--color-text-primary);
+  margin: 0 0 8px;
+  letter-spacing: 1px;
 }
 
-.gen-preview {
+.empty-desc {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  margin: 0 0 24px;
+  font-family: var(--font-ui);
+}
+
+.empty-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  background: var(--color-accent);
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(201, 169, 78, 0.3);
+}
+.empty-cta:hover {
+  background: var(--color-accent-light);
+  box-shadow: 0 4px 16px rgba(201, 169, 78, 0.4);
+  transform: translateY(-1px);
+}
+
+/* ── Markdown Body ── */
+.markdown-body {
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 8px;
+  font-family: var(--font-editor);
   font-size: 14px;
   line-height: 1.7;
   color: var(--color-text-primary);
+  overflow-x: auto;
 }
 
-.gen-preview :deep(h1),
-.gen-preview :deep(h2),
-.gen-preview :deep(h3),
-.gen-preview :deep(h4) {
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3),
+.markdown-body :deep(h4) {
   font-family: var(--font-display);
   font-weight: 600;
-  margin: 1em 0 0.5em;
+  margin: 0.8em 0 0.4em;
   color: var(--color-accent-dark);
 }
-
-.gen-preview :deep(h1) { font-size: 1.4em; }
-.gen-preview :deep(h2) { font-size: 1.2em; }
-.gen-preview :deep(h3) { font-size: 1.1em; }
-
-.gen-preview :deep(p) {
-  margin: 0 0 0.6em;
-}
-
-.gen-preview :deep(ul),
-.gen-preview :deep(ol) {
-  padding-left: 1.5em;
-  margin: 0.4em 0;
-}
-
-.gen-preview :deep(li) {
-  margin: 0.2em 0;
-}
-
-.gen-preview :deep(strong) {
-  font-weight: 600;
-}
-
-.gen-preview :deep(code) {
+.markdown-body :deep(h1) { font-size: 1.35em; }
+.markdown-body :deep(h2) { font-size: 1.2em; }
+.markdown-body :deep(h3) { font-size: 1.1em; }
+.markdown-body :deep(p) { margin: 0 0 0.5em; }
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) { padding-left: 1.5em; margin: 0.3em 0; }
+.markdown-body :deep(li) { margin: 0.15em 0; }
+.markdown-body :deep(strong) { font-weight: 600; }
+.markdown-body :deep(code) {
   background: rgba(201, 169, 78, 0.1);
   padding: 2px 6px;
   border-radius: 3px;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 0.9em;
 }
-
-.gen-preview :deep(pre) {
+.markdown-body :deep(pre) {
   background: var(--color-bg-page);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   padding: 12px;
   overflow-x: auto;
 }
-
-.gen-preview :deep(hr) {
+.markdown-body :deep(pre code) { background: none; padding: 0; }
+.markdown-body :deep(hr) {
   border: none;
   border-top: 1px solid var(--color-border);
   margin: 1em 0;
+}
+.markdown-body :deep(blockquote) {
+  border-left: 3px solid var(--color-accent);
+  margin: 0.4em 0;
+  padding: 4px 12px;
+  color: var(--color-text-secondary);
+  background: rgba(201, 169, 78, 0.04);
+  border-radius: 0 4px 4px 0;
+}
+.markdown-body :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  border: 1px solid var(--color-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.markdown-body :deep(th) {
+  background: var(--color-bg-page);
+  font-weight: 600;
+}
+
+/* ── Generation Modal ── */
+.gen-prompt-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.gen-output {
+  min-height: 150px;
+}
+.gen-meta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0 0 12px;
+  font-family: var(--font-ui);
+}
+.gen-text {
+  white-space: pre-wrap;
+  font-family: var(--font-editor);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── Transitions ── */
+.outline-slide-enter-active {
+  transition: all 0.25s ease-out;
+  overflow: hidden;
+}
+.outline-slide-leave-active {
+  transition: all 0.15s ease-in;
+  overflow: hidden;
+}
+.outline-slide-enter-from,
+.outline-slide-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+.outline-slide-enter-to,
+.outline-slide-leave-from {
+  max-height: 2000px;
+}
+
+/* ── Spin animation ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .toolbar-right {
+    flex-wrap: wrap;
+  }
+  .volume-header-top {
+    flex-direction: column;
+  }
+  .volume-header-actions {
+    margin-left: 44px;
+  }
+  .chapter-inner {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .chapter-side {
+    flex-direction: row;
+    align-items: center;
+  }
+  .chapter-actions {
+    opacity: 1;
+  }
 }
 </style>
