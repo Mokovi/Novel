@@ -951,7 +951,7 @@ onBeforeUnmount(() => {
 }
 
 .paper {
-  flex: 1;
+  flex: 1 0 auto;
   max-width: 720px;
   width: 100%;
   margin: 0 auto;
@@ -987,6 +987,8 @@ onBeforeUnmount(() => {
   outline: none;
   position: relative;
   z-index: 1;
+  width: 100%;
+  max-width: 100%;
 }
 
 :deep(.ProseMirror) {
@@ -997,10 +999,13 @@ onBeforeUnmount(() => {
   line-height: 2;
   color: var(--color-text-primary);
   letter-spacing: 0.01em;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 :deep(.ProseMirror p) {
   margin: 0 0 0.5em;
+  text-indent: 2em;
 }
 
 :deep(.ProseMirror p.is-editor-empty:first-child::before) {
