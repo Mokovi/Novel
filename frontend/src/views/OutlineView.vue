@@ -5,8 +5,8 @@
     <!-- Toolbar -->
     <div class="toolbar">
       <n-button type="primary" @click="showCreateVolume = true">创建卷</n-button>
-      <n-button @click="showCreateChapter = true">创建章节</n-button>
       <n-button @click="showCreateArc = true">创建节</n-button>
+      <n-button @click="showCreateChapter = true">创建章节</n-button>
       <n-divider vertical />
       <n-button @click="handleBatchDownload">批量下载</n-button>
     </div>
@@ -18,6 +18,11 @@
         <div class="section-header-actions">
           <n-button
             size="tiny"
+            @click="showBookOutline = !showBookOutline"
+          >{{ showBookOutline ? '收起' : '展开' }}</n-button>
+          <n-button
+            v-if="showBookOutline"
+            size="tiny"
             :type="outlineMode.book === 'preview' ? 'primary' : 'default'"
             @click="toggleOutlineMode('book')"
           >{{ outlineMode.book === 'preview' ? '编辑' : '预览' }}</n-button>
@@ -28,7 +33,7 @@
           >生成全书大纲</n-button>
         </div>
       </div>
-      <div v-if="bookOutline" class="outline-text">
+      <div v-if="showBookOutline && bookOutline" class="outline-text">
         <div v-if="outlineMode.book === 'preview'" class="markdown-preview" v-html="renderMarkdown(bookOutline)" />
         <n-input
           v-else
@@ -41,7 +46,8 @@
           <n-button size="tiny" @click="handleSaveBookOutline">保存</n-button>
         </div>
       </div>
-      <p v-else class="outline-empty">尚未生成全书大纲</p>
+      <p v-if="!showBookOutline && bookOutline" class="outline-empty">全书大纲已生成（点击展开查看）</p>
+      <p v-if="!bookOutline" class="outline-empty">尚未生成全书大纲</p>
     </div>
 
     <!-- Volume list -->
@@ -388,6 +394,7 @@ function toggleOutlineMode(key) {
 
 // Book outline
 const bookOutline = ref('')
+const showBookOutline = ref(false)
 
 // ── Generation modal state ────────────────────────────────
 const showGenOutput = ref(false)
@@ -643,12 +650,14 @@ onMounted(async () => {
   ])
   bookOutline.value = settingsStore.bookOutline
 
-  // Initialize outline displays and store values
+  // Initialize outline displays (collapsed by default) and store values
   for (const vol of store.volumes) {
+    showVolumeOutline[vol.id] = false
     volOutlines[vol.id] = vol.outline || ''
     outlineMode[`vol_${vol.id}`] = 'preview'
   }
   for (const arc of store.arcs) {
+    showArcOutline[arc.id] = false
     arcOutlines[arc.id] = arc.outline || ''
     outlineMode[`arc_${arc.id}`] = 'preview'
   }
