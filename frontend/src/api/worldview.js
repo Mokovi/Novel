@@ -1,18 +1,18 @@
-import axios from 'axios'
+import http from './http'
 
-const http = axios.create({
-  baseURL: '/api/v1',
-})
-
-export function getWorldview() {
-  return http.get('/worldview')
+export function getWorldview(bookId) {
+  const params = bookId ? { book_id: bookId } : {}
+  return http.get('/worldview', { params })
 }
 
-export function updateWorldview(data, section) {
-  const params = section ? { section } : {}
+export function updateWorldview(data, section, bookId) {
+  const params = {}
+  if (section) params.section = section
+  if (bookId) params.book_id = bookId
   return http.put('/worldview', data, { params })
 }
 
-export function getInjectPreview() {
-  return http.get('/worldview/inject-preview')
+export function getInjectPreview(bookId) {
+  const params = bookId ? { book_id: bookId } : {}
+  return http.get('/worldview/inject-preview', { params })
 }

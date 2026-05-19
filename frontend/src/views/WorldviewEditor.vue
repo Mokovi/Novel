@@ -91,14 +91,18 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { useWorldviewStore } from '../stores/worldview.js'
 import GlossaryEditor from '../components/worldview/GlossaryEditor.vue'
 import ObjectEditor from '../components/worldview/ObjectEditor.vue'
 import ArrayEditor from '../components/worldview/ArrayEditor.vue'
 
+const route = useRoute()
 const store = useWorldviewStore()
 const message = useMessage()
+
+const bookId = computed(() => Number(route.params.bookId))
 
 const showPreview = ref(false)
 const dirtySections = ref(new Set())
@@ -133,25 +137,25 @@ function onGlossaryUpdate(items) {
 }
 
 async function saveSection(key) {
-  await store.saveSection(key)
+  await store.saveSection(key, bookId.value)
   dirtySections.value.delete(key)
   message.success(`${key} 已保存`)
 }
 
 async function refreshData() {
-  await store.fetch()
+  await store.fetch(bookId.value)
   dirtySections.value.clear()
   message.success('已刷新')
 }
 
 watch(showPreview, async (val) => {
   if (val) {
-    await store.fetchPreview()
+    await store.fetchPreview(bookId.value)
   }
 })
 
 onMounted(() => {
-  store.fetch()
+  store.fetch(bookId.value)
 })
 </script>
 

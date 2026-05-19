@@ -20,47 +20,44 @@ export const useWorldviewStore = defineStore('worldview', {
       }))
     },
     isGlossary: (state) => (key) => key === '术语表',
-    /**
-     * Get the content of a specific section by key.
-     */
     sectionContent: (state) => (key) => state.data[key] ?? null,
   },
 
   actions: {
-    async fetch() {
+    async fetch(bookId) {
       this.loading = true
       try {
-        const res = await getWorldview()
+        const res = await getWorldview(bookId)
         this.data = res.data
       } finally {
         this.loading = false
       }
     },
 
-    async saveSection(sectionKey) {
+    async saveSection(sectionKey, bookId) {
       const content = this.data[sectionKey]
       if (content === undefined) return
       this.saving = true
       try {
-        await updateWorldview(content, sectionKey)
+        await updateWorldview(content, sectionKey, bookId)
       } finally {
         this.saving = false
       }
     },
 
-    async saveAll() {
+    async saveAll(bookId) {
       this.saving = true
       try {
-        await updateWorldview(this.data)
+        await updateWorldview(this.data, null, bookId)
       } finally {
         this.saving = false
       }
     },
 
-    async fetchPreview() {
+    async fetchPreview(bookId) {
       this.previewLoading = true
       try {
-        const res = await getInjectPreview()
+        const res = await getInjectPreview(bookId)
         this.previewText = res.data.text
         this.previewTokenEstimate = res.data.token_estimate
       } finally {

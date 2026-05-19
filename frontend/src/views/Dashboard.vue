@@ -48,13 +48,16 @@
 
 <script setup>
 import { computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useChaptersStore } from '../stores/chapters.js'
 import OutlineIcon from '../assets/icons/OutlineIcon.vue'
 import EditorIcon from '../assets/icons/EditorIcon.vue'
 
 const router = useRouter()
+const route = useRoute()
 const store = useChaptersStore()
+
+const bookId = computed(() => Number(route.params.bookId))
 
 const stats = computed(() => [
   { label: '卷', value: store.volumes.length },
@@ -68,20 +71,20 @@ const totalWords = computed(() =>
 )
 
 function goToOutline() {
-  router.push({ name: 'outline' })
+  router.push(`/books/${bookId.value}/outline`)
 }
 
 function goToEditor() {
   if (store.chapters.length) {
-    router.push(`/editor/${store.chapters[0].id}`)
+    router.push(`/books/${bookId.value}/editor/${store.chapters[0].id}`)
   } else {
-    router.push({ name: 'outline' })
+    router.push(`/books/${bookId.value}/outline`)
   }
 }
 
 onMounted(async () => {
-  await store.fetchVolumes()
-  await store.fetchChapters()
+  await store.fetchVolumes(bookId.value)
+  await store.fetchChapters(bookId.value)
 })
 </script>
 

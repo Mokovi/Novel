@@ -11,20 +11,20 @@ export const useChaptersStore = defineStore('chapters', {
   }),
 
   actions: {
-    async fetchVolumes() {
-      const res = await listVolumes()
+    async fetchVolumes(bookId) {
+      const res = await listVolumes(bookId)
       this.volumes = res.data
     },
 
-    async fetchChapters(volumeId) {
+    async fetchChapters(bookId, volumeId) {
       const params = volumeId ? { volume_id: volumeId } : {}
-      const res = await listChapters(params)
+      const res = await listChapters(bookId, params)
       this.chapters = res.data
     },
 
-    async fetchArcs(volumeId) {
+    async fetchArcs(bookId, volumeId) {
       const params = volumeId ? { volume_id: volumeId } : {}
-      const res = await listArcs(params)
+      const res = await listArcs(bookId, params)
       this.arcs = res.data
     },
 

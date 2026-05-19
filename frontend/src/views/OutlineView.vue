@@ -269,7 +269,7 @@
                   class="chapter-card"
                   :class="`status-${ch.status}`"
                   :style="{ '--c-delay': `${cIdx * 0.04}s` }"
-                  @click="$router.push(`/editor/${ch.id}`)"
+                  @click="$router.push(`/books/${bookId}/editor/${ch.id}`)"
                 >
                   <div class="chapter-strip" />
                   <div class="chapter-inner">
@@ -331,7 +331,7 @@
                   class="chapter-card"
                   :class="`status-${ch.status}`"
                   :style="{ '--c-delay': `${cIdx * 0.04}s` }"
-                  @click="$router.push(`/editor/${ch.id}`)"
+                  @click="$router.push(`/books/${bookId}/editor/${ch.id}`)"
                 >
                   <div class="chapter-strip" />
                   <div class="chapter-inner">
@@ -501,7 +501,7 @@
 
 <script setup>
 import { ref, onMounted, computed, reactive, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { marked } from 'marked'
 import { useChaptersStore } from '../stores/chapters.js'
@@ -518,9 +518,12 @@ import {
 } from '../api/generate.js'
 
 const router = useRouter()
+const route = useRoute()
 const message = useMessage()
 const store = useChaptersStore()
 const settingsStore = useSettingsStore()
+
+const bookId = computed(() => Number(route.params.bookId))
 
 const showCreateVolume = ref(false)
 const showCreateChapter = ref(false)
@@ -709,10 +712,10 @@ async function runOutlineSSE(label, urlFn, onContentDone) {
 // ── Handlers ──────────────────────────────────────────────
 
 async function handleCreateVolume() {
-  await createVolume(newVolume.value)
+  await createVolume(newVolume.value, bookId.value)
   newVolume.value = { title: '', description: '' }
   showCreateVolume.value = false
-  await store.fetchVolumes()
+  await store.fetchVolumes(bookId.value)
   message.success('卷已创建')
 }
 
@@ -724,7 +727,7 @@ async function handleCreateArc() {
   await createArc(newArc.value)
   newArc.value = { volume_id: null, title: '', description: '' }
   showCreateArc.value = false
-  await store.fetchArcs()
+  await store.fetchArcs(bookId.value)
   message.success('节已创建')
 }
 
@@ -732,33 +735,33 @@ async function handleCreateChapter() {
   await createChapter(newChapter.value)
   newChapter.value = { volume_id: null, arc_id: null, title: '', summary: '' }
   showCreateChapter.value = false
-  await store.fetchChapters()
+  await store.fetchChapters(bookId.value)
   message.success('章节已创建')
 }
 
 async function handleDeleteVolume(id) {
   await deleteVolume(id)
-  await store.fetchVolumes()
-  await store.fetchChapters()
-  await store.fetchArcs()
+  await store.fetchVolumes(bookId.value)
+  await store.fetchChapters(bookId.value)
+  await store.fetchArcs(bookId.value)
   message.success('卷已删除')
 }
 
 async function handleDeleteChapter(id, volumeId) {
   await deleteChapter(id)
-  await store.fetchChapters(volumeId)
+  await store.fetchChapters(bookId.value, volumeId)
   message.success('章节已删除')
 }
 
 async function handleDeleteArc(id) {
   await deleteArc(id)
-  await store.fetchArcs()
-  await store.fetchChapters()
+  await store.fetchArcs(bookId.value)
+  await store.fetchChapters(bookId.value)
   message.success('节已删除')
 }
 
 function handleGenerateChapter(ch) {
-  router.push(`/editor/${ch.id}?generate=1`)
+  router.push(`/books/${bookId.value}/editor/${ch.id}?generate=1`)
 }
 
 async function handleRegenerateSummary(ch) {
@@ -782,7 +785,7 @@ async function handleDownloadChapter(ch) {
 }
 
 async function handleBatchDownload() {
-  const res = await downloadAllChapters()
+  const res = await downloadAllChapters(bookId.value)
   const url = URL.createObjectURL(new Blob([res.data]))
   const a = document.createElement('a')
   a.href = url
@@ -795,21 +798,21 @@ async function handleBatchDownload() {
 
 function prepareGenerateBook() {
   bookGenerating.value = true
-  runOutlineSSE('全书大纲', (handlers) => generateBookOutline(handlers), (content) => {
+  runOutlineSSE('全书大纲', (handlers) => generateBookOutline(bookId.value, handlers), (content) => {
     bookOutline.value = content
   })
 }
 
 function prepareGenerateVolume(vol) {
   volGenerating[vol.id] = true
-  runOutlineSSE(`卷纲: ${vol.title}`, (handlers) => generateVolumeOutline(vol.id, handlers), (content) => {
+  runOutlineSSE(`卷纲: ${vol.title}`, (handlers) => generateVolumeOutline(vol.id, bookId.value, handlers), (content) => {
     volOutlines[vol.id] = content
   })
 }
 
 function prepareGenerateArc(arc) {
   arcGenerating[arc.id] = true
-  runOutlineSSE(`节纲: ${arc.title}`, (handlers) => generateArcOutline(arc.id, handlers), (content) => {
+  runOutlineSSE(`节纲: ${arc.title}`, (handlers) => generateArcOutline(arc.id, bookId.value, handlers), (content) => {
     arcOutlines[arc.id] = content
   })
 }
@@ -827,7 +830,7 @@ watch(showGenOutput, (val) => {
 
 async function handleSaveBookOutline() {
   settingsStore.bookOutline = bookOutline.value
-  await settingsStore.saveBookOutline()
+  await settingsStore.saveBookOutline(bookId.value)
   message.success('全书大纲已保存')
 }
 
@@ -845,10 +848,10 @@ async function handleSaveArcOutline(arc) {
 
 onMounted(async () => {
   await Promise.all([
-    store.fetchVolumes(),
-    store.fetchChapters(),
-    store.fetchArcs(),
-    settingsStore.fetchBookOutline(),
+    store.fetchVolumes(bookId.value),
+    store.fetchChapters(bookId.value),
+    store.fetchArcs(bookId.value),
+    settingsStore.fetchBookOutline(bookId.value),
   ])
   bookOutline.value = settingsStore.bookOutline
 

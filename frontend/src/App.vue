@@ -1,52 +1,83 @@
 <template>
   <n-config-provider :locale="zhCN" :theme-overrides="themeOverrides">
     <n-message-provider>
-      <n-layout position="absolute" style="height: 100vh">
-        <n-layout has-sider position="absolute">
-          <!-- Sidebar -->
-          <n-layout-sider bordered width="220" :native-scrollbar="false">
-            <div class="sidebar-container">
-              <!-- Brand -->
-              <div class="sidebar-brand">
-                <AppIcon name="logo" :size="26" class="brand-icon" />
-                <span class="brand-text">作者工坊</span>
-              </div>
+      <!-- Auth pages: no sidebar -->
+      <template v-if="layout === 'auth'">
+        <router-view />
+      </template>
 
-              <!-- Navigation -->
-              <n-menu
-                :value="activeMenu"
-                :options="menuOptions"
-                @update:value="onMenuSelect"
-                class="sidebar-menu"
-              />
+      <!-- Book select page: simple top bar -->
+      <template v-else-if="layout === 'book-select'">
+        <div class="book-select-layout">
+          <div class="book-select-topbar">
+            <div class="topbar-brand">
+              <AppIcon name="logo" :size="22" class="brand-icon" />
+              <span class="brand-text">作者工坊</span>
+            </div>
+            <div class="topbar-right">
+              <span v-if="authStore.user" class="topbar-username">{{ authStore.user.username }}</span>
+              <n-button size="tiny" quaternary @click="handleLogout">退出</n-button>
+            </div>
+          </div>
+          <div class="book-select-content">
+            <router-view />
+          </div>
+        </div>
+      </template>
 
-              <!-- Version footer -->
-              <div class="sidebar-footer">
-                <div class="footer-row">
-                  <n-tooltip trigger="hover">
-                    <template #trigger>
-                      <n-text depth="3" class="version-text">v{{ version }}</n-text>
-                    </template>
-                    当前项目版本
-                  </n-tooltip>
-                  <n-tag v-if="adminStore.isAdmin" type="warning" size="tiny" class="admin-badge">ADMIN</n-tag>
+      <!-- Main app: full sidebar -->
+      <template v-else>
+        <n-layout position="absolute" style="height: 100vh">
+          <n-layout has-sider position="absolute">
+            <!-- Sidebar -->
+            <n-layout-sider bordered width="220" :native-scrollbar="false">
+              <div class="sidebar-container">
+                <!-- Brand -->
+                <div class="sidebar-brand">
+                  <AppIcon name="logo" :size="26" class="brand-icon" />
+                  <span class="brand-text">作者工坊</span>
+                </div>
+
+                <!-- Book selector -->
+                <BookSelector />
+
+                <!-- Navigation -->
+                <n-menu
+                  :value="activeMenu"
+                  :options="menuOptions"
+                  @update:value="onMenuSelect"
+                  class="sidebar-menu"
+                />
+
+                <!-- User + version footer -->
+                <div class="sidebar-footer">
+                  <div class="footer-row">
+                    <span v-if="authStore.user" class="username-text">{{ authStore.user.username }}</span>
+                    <n-button size="tiny" quaternary @click="handleLogout">退出</n-button>
+                  </div>
+                  <div class="footer-row" style="margin-top: 4px">
+                    <n-tooltip trigger="hover">
+                      <template #trigger>
+                        <n-text depth="3" class="version-text">v{{ version }}</n-text>
+                      </template>
+                      当前项目版本
+                    </n-tooltip>
+                  </div>
                 </div>
               </div>
-            </div>
-          </n-layout-sider>
+            </n-layout-sider>
 
-          <!-- Main content -->
-          <n-layout-content class="main-content">
-            <router-view v-slot="{ Component, route: r }">
-              <transition name="fade-slide" mode="out-in">
-                <component :is="Component" :key="r.path" />
-              </transition>
-            </router-view>
-          </n-layout-content>
+            <!-- Main content -->
+            <n-layout-content class="main-content">
+              <router-view v-slot="{ Component, route: r }">
+                <transition name="fade-slide" mode="out-in">
+                  <component :is="Component" :key="r.path" />
+                </transition>
+              </router-view>
+            </n-layout-content>
+          </n-layout>
         </n-layout>
-
-        <AdminLoginModal v-model:show="showAdminModal" />
-      </n-layout>
+      </template>
     </n-message-provider>
   </n-config-provider>
 </template>
@@ -54,12 +85,22 @@
 <script setup>
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { NConfigProvider, NMessageProvider, NLayout, NLayoutSider, NLayoutContent, NMenu, NTag, NText, NTooltip } from 'naive-ui'
+import {
+  NButton,
+  NConfigProvider,
+  NLayout,
+  NLayoutContent,
+  NLayoutSider,
+  NMenu,
+  NMessageProvider,
+  NText,
+  NTooltip,
+} from 'naive-ui'
 import { zhCN } from 'naive-ui'
 import { lightThemeOverrides } from './styles/naive-theme.js'
 import AppIcon from './components/common/AppIcon.vue'
-import AdminLoginModal from './components/common/AdminLoginModal.vue'
-import { useAdminStore } from './stores/admin.js'
+import BookSelector from './components/common/BookSelector.vue'
+import { useAuthStore } from './stores/auth.js'
 import DashboardIcon from './assets/icons/DashboardIcon.vue'
 import OutlineIcon from './assets/icons/OutlineIcon.vue'
 import EditorIcon from './assets/icons/EditorIcon.vue'
@@ -70,10 +111,28 @@ import SettingsIcon from './assets/icons/SettingsIcon.vue'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 
 const themeOverrides = lightThemeOverrides
 
-const activeMenu = computed(() => route.name || 'dashboard')
+const version = ref('')
+
+const layout = computed(() => {
+  return route.meta?.layout || 'app'
+})
+
+const activeMenu = computed(() => {
+  // For book-scoped routes, map the route name back to menu keys
+  const name = route.name
+  if (name === 'dashboard') return 'dashboard'
+  if (name === 'outline') return 'outline'
+  if (name === 'editor') return 'editor'
+  if (name === 'worldview') return 'worldview'
+  if (name === 'characters' || name === 'character-detail') return 'characters'
+  if (name === 'templates') return 'templates'
+  if (name === 'settings') return 'settings'
+  return 'dashboard'
+})
 
 const iconSize = 20
 
@@ -115,32 +174,36 @@ const menuOptions = [
   },
 ]
 
-const version = ref('')
-const adminStore = useAdminStore()
-const showAdminModal = ref(false)
-
-function handleKeydown(e) {
-  if (e.ctrlKey && e.key === 'u') {
-    e.preventDefault()
-    showAdminModal.value = true
-  }
+function getCurrentBookId() {
+  return Number(route.params.bookId) || null
 }
 
 function onMenuSelect(key) {
-  router.push({ name: key })
+  const bookId = getCurrentBookId()
+  const routes = {
+    dashboard: bookId ? `/books/${bookId}/dashboard` : '/books',
+    outline: bookId ? `/books/${bookId}/outline` : '/books',
+    editor: bookId ? `/books/${bookId}/editor` : '/books',
+    worldview: bookId ? `/books/${bookId}/worldview` : '/books',
+    characters: bookId ? `/books/${bookId}/characters` : '/books',
+    templates: '/templates',
+    settings: '/settings',
+  }
+  const path = routes[key]
+  if (path) router.push(path)
+}
+
+function handleLogout() {
+  authStore.logout()
+  router.push('/login')
 }
 
 onMounted(async () => {
-  window.addEventListener('keydown', handleKeydown)
   try {
     const res = await fetch('/api/v1/health')
     const data = await res.json()
     version.value = data.version || ''
   } catch { /* health endpoint not available */ }
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeydown)
 })
 </script>
 
@@ -192,19 +255,59 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.username-text {
+  font-size: 12px;
+  color: var(--color-text-on-dark-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .version-text {
   font-size: 12px;
   cursor: default;
   color: var(--color-text-on-dark-muted) !important;
 }
 
-.admin-badge {
-  font-size: 10px;
-  letter-spacing: 1px;
-}
-
 .main-content {
   padding: 32px;
   overflow-y: auto;
+}
+
+/* Book select layout */
+.book-select-layout {
+  min-height: 100vh;
+  background: var(--color-bg-body);
+}
+
+.book-select-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar-username {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.book-select-content {
+  padding: 24px;
 }
 </style>

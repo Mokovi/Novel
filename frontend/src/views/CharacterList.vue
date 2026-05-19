@@ -69,14 +69,17 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { listCharacters } from '../api/characters.js'
 import CharacterForm from '../components/character/CharacterForm.vue'
 
 const router = useRouter()
+const route = useRoute()
 const message = useMessage()
+
+const bookId = computed(() => Number(route.params.bookId))
 
 const characters = ref([])
 const loading = ref(false)
@@ -103,7 +106,7 @@ async function fetchCharacters() {
   try {
     const params = {}
     if (roleFilter.value) params.role_type = roleFilter.value
-    const res = await listCharacters(params)
+    const res = await listCharacters(bookId.value, params)
     characters.value = res.data
   } catch {
     message.error('加载人物列表失败')
@@ -117,7 +120,7 @@ function onFilterChange() {
 }
 
 function openDetail(id) {
-  router.push({ name: 'character-detail', params: { id } })
+  router.push(`/books/${bookId.value}/characters/${id}`)
 }
 
 function onCreated() {

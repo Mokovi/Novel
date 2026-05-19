@@ -10,7 +10,7 @@
         </svg>
         <h2 class="empty-heading">选择章节开始写作</h2>
         <p class="empty-desc">从左侧目录中选择一个章节，或前往大纲视图创建新章节</p>
-        <button class="empty-action" @click="$router.push('/outline')">前往大纲</button>
+        <button class="empty-action" @click="goToOutline">前往大纲</button>
       </div>
     </div>
 
@@ -19,7 +19,7 @@
       <!-- ─── TOP BAR ─── -->
       <header class="scriptorium-topbar">
         <div class="topbar-left">
-          <button class="topbar-back" @click="$router.push('/outline')" title="返回大纲">
+          <button class="topbar-back" @click="goToOutline" title="返回大纲">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M11 4L6 9l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -395,8 +395,14 @@ const statusLabel = (s) =>
   ({ pending: '待生成', generating: '生成中', completed: '已完成' }[s] || s)
 
 // ── Navigation ──
+const bookId = computed(() => Number(route.params.bookId))
+
+function goToOutline() {
+  router.push(`/books/${bookId.value}/outline`)
+}
+
 function onSelectChapter(id) {
-  router.push(`/editor/${id}`)
+  router.push(`/books/${bookId.value}/editor/${id}`)
 }
 
 watch(
@@ -525,7 +531,7 @@ async function handlePreviewPrompt() {
   previewLoading.value = true
   showPreviewModal.value = true
   try {
-    const res = await previewPrompt(store.currentChapter.id)
+    const res = await previewPrompt(store.currentChapter.id, bookId.value)
     previewData.value = res.data
   } catch (e) {
     message.error(`获取预览失败: ${e.message}`)
@@ -572,7 +578,7 @@ async function handleDelete() {
   try {
     await deleteChapter(store.currentChapter.id)
     message.success('章节已删除')
-    router.push('/outline')
+    router.push(`/books/${bookId.value}/outline`)
   } catch (e) {
     message.error(`删除失败: ${e.response?.data?.detail || e.message}`)
   }
@@ -580,11 +586,11 @@ async function handleDelete() {
 
 // ── Lifecycle ──
 onMounted(async () => {
-  await store.fetchVolumes()
-  await store.fetchChapters()
+  await store.fetchVolumes(bookId.value)
+  await store.fetchChapters(bookId.value)
   try {
     charactersLoading.value = true
-    const res = await listCharacters({ limit: 500 })
+    const res = await listCharacters(bookId.value, { limit: 500 })
     allCharacters.value = res.data
   } catch (e) {
     console.error('Failed to load characters:', e)

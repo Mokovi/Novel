@@ -1,8 +1,4 @@
-import axios from 'axios'
-
-const http = axios.create({
-  baseURL: '/api/v1',
-})
+import http from './http'
 
 export function listTemplates() {
   return http.get('/templates')

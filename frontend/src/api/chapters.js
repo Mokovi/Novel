@@ -1,15 +1,11 @@
-import axios from 'axios'
+import http from './http'
 
-const http = axios.create({
-  baseURL: '/api/v1',
-})
-
-export function listVolumes() {
-  return http.get('/volumes')
+export function listVolumes(bookId) {
+  return http.get('/volumes', { params: { book_id: bookId } })
 }
 
-export function listChapters(params = {}) {
-  return http.get('/chapters', { params })
+export function listChapters(bookId, params = {}) {
+  return http.get('/chapters', { params: { book_id: bookId, ...params } })
 }
 
 export function getChapter(id) {
@@ -32,8 +28,8 @@ export function deleteVolume(id) {
   return http.delete(`/volumes/${id}`)
 }
 
-export function createVolume(data) {
-  return http.post('/volumes', data)
+export function createVolume(data, bookId) {
+  return http.post('/volumes', data, { params: { book_id: bookId } })
 }
 
 export function updateVolume(id, data) {
@@ -44,8 +40,8 @@ export function downloadChapter(id) {
   return http.get(`/chapters/${id}/download`, { responseType: 'blob' })
 }
 
-export function downloadAllChapters() {
-  return http.get('/chapters/download-all', { responseType: 'blob' })
+export function downloadAllChapters(bookId) {
+  return http.get('/chapters/download-all', { params: { book_id: bookId }, responseType: 'blob' })
 }
 
 export function getChapterCharacters(id) {
@@ -58,8 +54,8 @@ export function setChapterCharacters(id, characterIds) {
 
 // ── Arc CRUD ─────────────────────────────────────────────
 
-export function listArcs(params = {}) {
-  return http.get('/arcs', { params })
+export function listArcs(bookId, params = {}) {
+  return http.get('/arcs', { params: { book_id: bookId, ...params } })
 }
 
 export function getArc(id) {

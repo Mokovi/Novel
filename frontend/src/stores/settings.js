@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getGenerationSettings, updateGenerationSettings, getBookOutline, updateBookOutline } from '../api/settings.js'
+import { getGenerationSettings, updateGenerationSettings } from '../api/settings.js'
+import { getBookOutline, updateBookOutline } from '../api/books.js'
 
 export const useSettingsStore = defineStore('settings', () => {
   const previousChapterCount = ref(1)
@@ -36,18 +37,18 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function fetchBookOutline() {
+  async function fetchBookOutline(bookId) {
     try {
-      const res = await getBookOutline()
-      bookOutline.value = res.data.book_outline || ''
+      const res = await getBookOutline(bookId)
+      bookOutline.value = res.data.outline || ''
     } catch (e) {
       console.error('Failed to fetch book outline:', e)
     }
   }
 
-  async function saveBookOutline() {
+  async function saveBookOutline(bookId) {
     try {
-      await updateBookOutline({ book_outline: bookOutline.value })
+      await updateBookOutline(bookId, { outline: bookOutline.value })
     } catch (e) {
       console.error('Failed to save book outline:', e)
     }

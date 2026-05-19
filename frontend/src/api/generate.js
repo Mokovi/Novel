@@ -1,24 +1,20 @@
 /**
  * SSE generation client — uses fetch() with ReadableStream for POST + streaming.
  */
-const BASE = '/api/v1'
 
-/**
- * Generic SSE stream consumer.
- *
- * @param {string} url - Full URL to POST to
- * @param {object} handlers - { onToken(text), onStart(data), onDone(data), onError(msg) }
- * @param {object} [body] - Optional JSON body
- * @returns {AbortController}
- */
-function consumeSSE(url, handlers, body) {
+function consumeSSE(url, handlers, body, token) {
   const controller = new AbortController()
 
   ;(async () => {
     try {
+      const headers = { 'Content-Type': 'application/json' }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
       const resp = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: body ? JSON.stringify(body) : '{}',
         signal: controller.signal,
       })
@@ -80,63 +76,38 @@ function consumeSSE(url, handlers, body) {
   return controller
 }
 
-/**
- * Start streaming generation for a chapter.
- *
- * @param {number} chapterId
- * @param {object} handlers - { onToken(text), onStart(data), onDone(data), onError(msg) }
- * @param {object} overrides - optional { temperature, max_tokens }
- * @returns {AbortController}
- */
+function getToken() {
+  return localStorage.getItem('auth_token')
+}
+
+const BASE = '/api/v1'
+
 export function generateChapter(chapterId, handlers, overrides = {}) {
-  return consumeSSE(`${BASE}/generate/chapter/${chapterId}`, handlers, overrides)
+  return consumeSSE(`${BASE}/generate/chapter/${chapterId}`, handlers, overrides, getToken())
 }
 
-/**
- * Start streaming arc outline generation.
- *
- * @param {number} arcId
- * @param {object} handlers
- * @param {object} [overrides]
- * @returns {AbortController}
- */
-export function generateArcOutline(arcId, handlers, overrides = {}) {
-  return consumeSSE(`${BASE}/generate/arc/${arcId}`, handlers, overrides)
+export function generateArcOutline(arcId, bookId, handlers, overrides = {}) {
+  const url = `${BASE}/generate/arc/${arcId}?book_id=${bookId}`
+  return consumeSSE(url, handlers, overrides, getToken())
 }
 
-/**
- * Start streaming volume outline generation.
- *
- * @param {number} volumeId
- * @param {object} handlers
- * @param {object} [overrides]
- * @returns {AbortController}
- */
-export function generateVolumeOutline(volumeId, handlers, overrides = {}) {
-  return consumeSSE(`${BASE}/generate/volume/${volumeId}`, handlers, overrides)
+export function generateVolumeOutline(volumeId, bookId, handlers, overrides = {}) {
+  const url = `${BASE}/generate/volume/${volumeId}?book_id=${bookId}`
+  return consumeSSE(url, handlers, overrides, getToken())
 }
 
-/**
- * Start streaming book-level outline generation.
- *
- * @param {object} handlers
- * @param {object} [overrides]
- * @returns {AbortController}
- */
-export function generateBookOutline(handlers, overrides = {}) {
-  return consumeSSE(`${BASE}/generate/book`, handlers, overrides)
+export function generateBookOutline(bookId, handlers, overrides = {}) {
+  const url = `${BASE}/generate/book?book_id=${bookId}`
+  return consumeSSE(url, handlers, overrides, getToken())
 }
 
-/**
- * Regenerate the AI summary for a chapter (non-streaming).
- *
- * @param {number} chapterId
- * @returns {Promise<{summary: string}>}
- */
 export async function regenerateSummary(chapterId) {
+  const headers = { 'Content-Type': 'application/json' }
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
   const resp = await fetch(`${BASE}/generate/chapter/${chapterId}/summary`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
   })
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ detail: 'Unknown error' }))
@@ -148,9 +119,12 @@ export async function regenerateSummary(chapterId) {
 // ── Preview helpers (non-streaming) ────────────────────────
 
 async function previewFetch(url) {
+  const headers = { 'Content-Type': 'application/json' }
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
   const resp = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
   })
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ detail: 'Unknown error' }))
@@ -159,42 +133,19 @@ async function previewFetch(url) {
   return resp.json()
 }
 
-/**
- * Get a prompt preview for a chapter without generating.
- *
- * @param {number} chapterId
- * @returns {Promise<{prompt: string, token_estimate: number, model: string, template_name: string}>}
- */
-export async function previewPrompt(chapterId) {
-  const data = await previewFetch(`${BASE}/generate/chapter/${chapterId}/preview`)
+export async function previewPrompt(chapterId, bookId) {
+  const data = await previewFetch(`${BASE}/generate/chapter/${chapterId}/preview?book_id=${bookId}`)
   return { data }
 }
 
-/**
- * Get a prompt preview for an arc outline.
- *
- * @param {number} arcId
- * @returns {Promise<{prompt: string, token_estimate: number, model: string, template_name: string}>}
- */
-export async function previewArcPrompt(arcId) {
-  return previewFetch(`${BASE}/generate/arc/${arcId}/preview`)
+export async function previewArcPrompt(arcId, bookId) {
+  return previewFetch(`${BASE}/generate/arc/${arcId}/preview?book_id=${bookId}`)
 }
 
-/**
- * Get a prompt preview for a volume outline.
- *
- * @param {number} volumeId
- * @returns {Promise<{prompt: string, token_estimate: number, model: string, template_name: string}>}
- */
-export async function previewVolumePrompt(volumeId) {
-  return previewFetch(`${BASE}/generate/volume/${volumeId}/preview`)
+export async function previewVolumePrompt(volumeId, bookId) {
+  return previewFetch(`${BASE}/generate/volume/${volumeId}/preview?book_id=${bookId}`)
 }
 
-/**
- * Get a prompt preview for the book outline.
- *
- * @returns {Promise<{prompt: string, token_estimate: number, model: string, template_name: string}>}
- */
-export async function previewBookPrompt() {
-  return previewFetch(`${BASE}/generate/book/preview`)
+export async function previewBookPrompt(bookId) {
+  return previewFetch(`${BASE}/generate/book/preview?book_id=${bookId}`)
 }

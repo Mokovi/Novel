@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models.model_api import ModelApi
+from backend.models.user import User
+from backend.routers.deps import get_current_user
 from backend.schemas.model_api import ModelApiCreate, ModelApiResponse, ModelApiUpdate
 from backend.services.model_router import test_connection_for_api
 from backend.utils.crypto import decrypt_api_key, encrypt_api_key, mask_api_key
@@ -30,13 +32,21 @@ def _build_response(api: ModelApi) -> ModelApiResponse:
 
 
 @router.get("/model-apis", response_model=list[ModelApiResponse])
-def list_apis(db: Session = Depends(get_db)):
-    return [_build_response(a) for a in db.query(ModelApi).order_by(ModelApi.id).all()]
+def list_apis(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return [_build_response(a) for a in db.query(ModelApi).filter(ModelApi.user_id == current_user.id).order_by(ModelApi.id).all()]
 
 
 @router.post("/model-apis", response_model=ModelApiResponse, status_code=201)
-def create_api(body: ModelApiCreate, db: Session = Depends(get_db)):
+def create_api(
+    body: ModelApiCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     api = ModelApi(
+        user_id=current_user.id,
         name=body.name,
         provider=body.provider,
         model_name=body.model_name,
@@ -54,8 +64,13 @@ def create_api(body: ModelApiCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/model-apis/{api_id}", response_model=ModelApiResponse)
-def update_api(api_id: int, body: ModelApiUpdate, db: Session = Depends(get_db)):
-    api = db.query(ModelApi).filter(ModelApi.id == api_id).first()
+def update_api(
+    api_id: int,
+    body: ModelApiUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    api = db.query(ModelApi).filter(ModelApi.id == api_id, ModelApi.user_id == current_user.id).first()
     if not api:
         raise HTTPException(status_code=404, detail="Model API not found")
 
@@ -76,8 +91,12 @@ def update_api(api_id: int, body: ModelApiUpdate, db: Session = Depends(get_db))
 
 
 @router.delete("/model-apis/{api_id}", status_code=204)
-def delete_api(api_id: int, db: Session = Depends(get_db)):
-    api = db.query(ModelApi).filter(ModelApi.id == api_id).first()
+def delete_api(
+    api_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    api = db.query(ModelApi).filter(ModelApi.id == api_id, ModelApi.user_id == current_user.id).first()
     if not api:
         raise HTTPException(status_code=404, detail="Model API not found")
     db.delete(api)
@@ -85,8 +104,12 @@ def delete_api(api_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/model-apis/{api_id}/test")
-async def test_api(api_id: int, db: Session = Depends(get_db)):
-    api = db.query(ModelApi).filter(ModelApi.id == api_id).first()
+async def test_api(
+    api_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    api = db.query(ModelApi).filter(ModelApi.id == api_id, ModelApi.user_id == current_user.id).first()
     if not api:
         raise HTTPException(status_code=404, detail="Model API not found")
     result = await test_connection_for_api(api)

@@ -40,7 +40,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { getCharacter, deleteCharacter } from '../api/characters.js'
@@ -52,6 +52,8 @@ const message = useMessage()
 
 const character = ref(null)
 const loading = ref(false)
+
+const bookId = computed(() => Number(route.params.bookId))
 
 async function fetchCharacter() {
   const id = Number(route.params.id)
@@ -68,7 +70,7 @@ async function fetchCharacter() {
 }
 
 function goBack() {
-  router.push({ name: 'characters' })
+  router.push(`/books/${bookId.value}/characters`)
 }
 
 async function handleDelete() {

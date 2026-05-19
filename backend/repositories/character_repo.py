@@ -15,11 +15,14 @@ from backend.schemas.character import (
 
 def list_characters(
     db: Session,
+    book_id: int | None = None,
     role_type: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[Character]:
     query = db.query(Character)
+    if book_id is not None:
+        query = query.filter(Character.book_id == book_id)
     if role_type:
         query = query.filter(Character.role_type == role_type)
     return query.order_by(Character.id).offset(skip).limit(limit).all()
@@ -29,8 +32,8 @@ def get_character(db: Session, character_id: int) -> Optional[Character]:
     return db.get(Character, character_id)
 
 
-def create_character(db: Session, data: CharacterCreate) -> Character:
-    character = Character(**data.model_dump())
+def create_character(db: Session, data: CharacterCreate, book_id: int = 1) -> Character:
+    character = Character(**data.model_dump(), book_id=book_id)
     db.add(character)
     db.commit()
     db.refresh(character)
@@ -102,9 +105,12 @@ def delete_relation(db: Session, relation_id: int) -> bool:
     return True
 
 
-def get_relations_graph(db: Session) -> dict:
+def get_relations_graph(db: Session, book_id: int | None = None) -> dict:
     """Return relations formatted for Vue Flow: {nodes: [...], edges: [...]}."""
-    characters = db.query(Character).all()
+    cq = db.query(Character)
+    if book_id is not None:
+        cq = cq.filter(Character.book_id == book_id)
+    characters = cq.all()
     relations = db.query(CharacterRelation).all()
 
     nodes = [
