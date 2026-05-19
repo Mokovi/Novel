@@ -682,6 +682,92 @@ def build_book_prompt_variables(db: Session, book_id: int) -> dict:
     }
 
 
+def _format_worldview_text_dict(data: dict) -> str:
+    """Format worldview dict as readable text for prompt injection."""
+    def _format_section(name: str, content) -> str:
+        lines = [f"## {name}"]
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict):
+                    lines.extend(f"- {k}: {v}" for k, v in item.items() if v)
+                elif item:
+                    lines.append(f"- {item}")
+        elif isinstance(content, dict):
+            for key, value in content.items():
+                if isinstance(value, list):
+                    if not value:
+                        continue
+                    lines.append(f"\n### {key}")
+                    for item in value:
+                        if isinstance(item, dict):
+                            lines.extend(f"  - {k}: {v}" for k, v in item.items() if v)
+                        elif item:
+                            lines.append(f"  - {item}")
+                elif isinstance(value, str) and value:
+                    lines.append(f"- {key}: {value}")
+        else:
+            lines.append(str(content))
+        return "\n".join(lines)
+
+    sections = []
+    for name, content in data.items():
+        text = _format_section(name, content)
+        if text.strip():
+            sections.append(text)
+    return "\n\n".join(sections)
+
+
+def build_worldview_prompt_variables(db: Session, book_id: int) -> dict:
+    """Assemble prompt variables for worldbuilding generation."""
+    try:
+        template = prompt_builder.load_template("worldbuilding")
+    except (FileNotFoundError, ValueError) as e:
+        return {"error": str(e)}
+
+    # Read current worldview from Book DB
+    book = book_repo.get_book(db, book_id)
+    worldview_dict = {}
+    if book and book.worldview:
+        try:
+            worldview_dict = json.loads(book.worldview)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    current_worldview = _format_worldview_text_dict(worldview_dict) if worldview_dict else "（暂无世界观设定）"
+
+    writing_style_text = ""
+    if book and book.writing_style:
+        writing_style_text = book.writing_style
+    if not writing_style_text:
+        writing_style_text = _read_json_file(DATA_DIR / "writing_style.json", "")
+
+    variables = {
+        "current_worldview": current_worldview,
+        "writing_style": writing_style_text,
+    }
+
+    try:
+        prompt = prompt_builder.build_prompt(template, variables)
+    except ValueError as e:
+        return {"error": str(e)}
+
+    token_estimate = prompt_builder.estimate_tokens(prompt)
+    route_config = resolve_api_for_task(db, "worldbuilding")
+    if not route_config or not route_config.get("api_key"):
+        return {"error": "No API configured for worldbuilding task"}
+    model_name = route_config.get("model_name", "")
+    template_name = template.get("frontmatter", {}).get("name", template.get("file_name", ""))
+
+    return {
+        "template": template,
+        "variables": variables,
+        "prompt": prompt,
+        "token_estimate": token_estimate,
+        "route_config": route_config,
+        "model_name": model_name,
+        "template_name": template_name,
+    }
+
+
 async def generate_outline_stream(
     db: Session,
     prompt_ctx: dict,

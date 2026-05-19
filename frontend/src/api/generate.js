@@ -150,6 +150,15 @@ export async function previewBookPrompt(bookId) {
   return previewFetch(`${BASE}/generate/book/preview?book_id=${bookId}`)
 }
 
+export function generateWorldview(bookId, handlers, overrides = {}) {
+  const url = `${BASE}/generate/worldview?book_id=${bookId}`
+  return consumeSSE(url, handlers, overrides, getToken())
+}
+
+export async function previewWorldviewPrompt(bookId) {
+  return previewFetch(`${BASE}/generate/worldview/preview?book_id=${bookId}`)
+}
+
 // ── Book-scoped generate APIs ─────────────────────────────
 
 export function generateBookOutlineScoped(bookId, handlers, overrides = {}) {

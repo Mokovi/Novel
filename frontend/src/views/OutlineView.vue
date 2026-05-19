@@ -462,6 +462,9 @@
             :autosize="{ minRows: 2, maxRows: 4 }"
             placeholder="补充提示词（可选）：输入您对本次大纲生成的特定要求..."
           />
+          <div v-if="adminStore.isAdmin && genPreviewTarget" style="margin-top:12px">
+            <n-button size="small" quaternary @click="handleGenPreview">提示词预览</n-button>
+          </div>
         </div>
         <div v-if="genPhase !== 'idle'" class="gen-output">
           <p v-if="genModel" class="gen-meta">模型: {{ genModel }} | 预估: {{ genTokens }} tokens</p>
@@ -486,6 +489,27 @@
       </n-card>
     </n-modal>
 
+    <!-- ═══ Prompt Preview Modal ═══ -->
+    <n-modal v-model:show="showPreviewModal" preset="card" title="提示词预览" style="max-width: 800px">
+      <n-space v-if="previewLoading" justify="center">
+        <n-spin />
+      </n-space>
+      <n-space v-else-if="previewData" vertical :size="12">
+        <n-space>
+          <n-tag type="info" size="small">模型: {{ previewData.model }}</n-tag>
+          <n-tag size="small">模板: {{ previewData.template_name }}</n-tag>
+          <n-tag size="small">预估: ~{{ previewData.token_estimate }} tokens</n-tag>
+        </n-space>
+        <n-input
+          type="textarea"
+          :value="previewData.prompt"
+          readonly
+          rows="20"
+          class="preview-textarea"
+        />
+      </n-space>
+    </n-modal>
+
     <!-- ═══ Confirm Delete Dialog ═══ -->
     <n-modal v-model:show="showDeleteConfirm" title="确认删除" preset="card" style="width: 400px">
       <p style="margin: 0; color: var(--color-text-secondary);">{{ deleteMessage }}</p>
@@ -506,6 +530,7 @@ import { useMessage } from 'naive-ui'
 import { marked } from 'marked'
 import { useChaptersStore } from '../stores/chapters.js'
 import { useSettingsStore } from '../stores/settings.js'
+import { useAdminStore } from '../stores/admin.js'
 import {
   createVolume, createChapter, deleteChapter, deleteVolume,
   downloadChapter, downloadAllChapters,
@@ -514,6 +539,7 @@ import {
 } from '../api/chapters.js'
 import {
   generateArcOutline, generateVolumeOutline, generateBookOutline,
+  previewBookPrompt, previewVolumePrompt, previewArcPrompt,
   regenerateSummary,
 } from '../api/generate.js'
 
@@ -522,6 +548,7 @@ const route = useRoute()
 const message = useMessage()
 const store = useChaptersStore()
 const settingsStore = useSettingsStore()
+const adminStore = useAdminStore()
 
 const bookId = computed(() => Number(route.params.bookId))
 
@@ -560,6 +587,12 @@ const genRunning = ref(false)
 const genAbort = ref(null)
 const genPhase = ref('idle') // 'idle' | 'generating' | 'done'
 const userPrompt = ref('')
+const genPreviewTarget = ref(null) // { type: 'book'|'volume'|'arc', id: number } | null
+
+// Preview modal state
+const showPreviewModal = ref(false)
+const previewData = ref(null)
+const previewLoading = ref(false)
 
 // Store the generation function to call when user clicks "开始生成"
 let pendingGenStart = null
@@ -805,6 +838,7 @@ async function handleBatchDownload() {
 
 function prepareGenerateBook() {
   bookGenerating.value = true
+  genPreviewTarget.value = { type: 'book' }
   runOutlineSSE('全书大纲', (handlers) => generateBookOutline(bookId.value, handlers), (content) => {
     bookOutline.value = content
   })
@@ -812,6 +846,7 @@ function prepareGenerateBook() {
 
 function prepareGenerateVolume(vol) {
   volGenerating[vol.id] = true
+  genPreviewTarget.value = { type: 'volume', id: vol.id }
   runOutlineSSE(`卷纲: ${vol.title}`, (handlers) => generateVolumeOutline(vol.id, bookId.value, handlers), (content) => {
     volOutlines[vol.id] = content
   })
@@ -819,9 +854,42 @@ function prepareGenerateVolume(vol) {
 
 function prepareGenerateArc(arc) {
   arcGenerating[arc.id] = true
+  genPreviewTarget.value = { type: 'arc', id: arc.id }
   runOutlineSSE(`节纲: ${arc.title}`, (handlers) => generateArcOutline(arc.id, bookId.value, handlers), (content) => {
     arcOutlines[arc.id] = content
   })
+}
+
+function handleGenPreview() {
+  if (!genPreviewTarget.value) return
+  previewLoading.value = true
+  previewData.value = null
+  showPreviewModal.value = true
+  const target = genPreviewTarget.value
+
+  const promise = (() => {
+    switch (target.type) {
+      case 'book':
+        return previewBookPrompt(bookId.value)
+      case 'volume':
+        return previewVolumePrompt(target.id, bookId.value)
+      case 'arc':
+        return previewArcPrompt(target.id, bookId.value)
+      default:
+        return Promise.reject(new Error('未知预览类型'))
+    }
+  })()
+
+  promise
+    .then((data) => {
+      previewData.value = data
+    })
+    .catch((e) => {
+      message.error(e.message || '获取提示词预览失败')
+    })
+    .finally(() => {
+      previewLoading.value = false
+    })
 }
 
 // Reset loading states when modal closes
@@ -830,6 +898,7 @@ watch(showGenOutput, (val) => {
     bookGenerating.value = false
     for (const k of Object.keys(volGenerating)) volGenerating[k] = false
     for (const k of Object.keys(arcGenerating)) arcGenerating[k] = false
+    genPreviewTarget.value = null
   }
 })
 
@@ -1970,5 +2039,11 @@ onMounted(async () => {
   .chapter-actions {
     opacity: 1;
   }
+}
+
+.preview-textarea :deep(textarea) {
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+  font-size: 13px;
+  line-height: 1.7;
 }
 </style>
