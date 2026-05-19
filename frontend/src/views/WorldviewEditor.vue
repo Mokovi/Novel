@@ -26,9 +26,15 @@
       <n-spin size="medium" />
     </div>
 
-    <!-- Markdown textarea -->
+    <!-- Markdown editor with preview/edit toggle -->
     <div v-else class="editor-body">
+      <div class="editor-mode-bar">
+        <button class="mode-btn" :class="{ active: isPreviewMode }" @click="isPreviewMode = true">预览</button>
+        <button class="mode-btn" :class="{ active: !isPreviewMode }" @click="isPreviewMode = false">编辑</button>
+      </div>
+      <div v-if="isPreviewMode" class="markdown-preview" v-html="renderMarkdown(store.worldview)" />
       <textarea
+        v-else
         v-model="store.worldview"
         class="markdown-textarea"
         placeholder="在此输入世界观设定（支持 Markdown 格式）&#10;&#10;可以使用 ## 标题、- 列表、**加粗** 等格式"
@@ -138,6 +144,7 @@ const message = useMessage()
 const bookId = computed(() => Number(route.params.bookId))
 
 const showPreview = ref(false)
+const isPreviewMode = ref(true)
 
 const preview = computed(() => ({
   text: store.previewText,
@@ -355,5 +362,48 @@ async function handlePreview() {
   font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
   font-size: 13px;
   line-height: 1.7;
+}
+
+/* ── Preview/Edit mode toggle ── */
+.editor-mode-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.mode-btn {
+  padding: 6px 20px;
+  font-size: 13px;
+  font-family: var(--font-ui);
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-text-muted);
+  transition: all var(--transition-fast);
+}
+
+.mode-btn.active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.mode-btn:not(.active):hover {
+  background: var(--color-bg-hover, #f0f0f0);
+}
+
+.markdown-preview {
+  min-height: 500px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fafaf8;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--color-text);
+  overflow-y: auto;
 }
 </style>

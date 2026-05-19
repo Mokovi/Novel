@@ -329,6 +329,9 @@
             </div>
           </div>
         </div>
+
+        <!-- Regenerate confirmation modal -->
+        <n-modal v-model:show="showRegenerateConfirm" preset="dialog" title="重新生成章节" content="章节已有内容，重新生成将覆盖现有内容。确定继续？" positive-text="确定继续" negative-text="取消" @positive-click="confirmRegenerate" @negative-click="showRegenerateConfirm = false" />
       </div>
     </template>
 
@@ -531,12 +534,23 @@ async function handleWorldviewLevelChange(val) {
 }
 
 // ── AI Generation ──
-async function handleGenerate() {
+function handleGenerate() {
   if (!store.currentChapter) return
   if (store.currentChapter.content) {
-    const ok = window.confirm('章节已有内容，重新生成将覆盖现有内容。确定继续？')
-    if (!ok) return
+    showRegenerateConfirm.value = true
+    return
   }
+  openGenPanel()
+}
+
+const showRegenerateConfirm = ref(false)
+
+function confirmRegenerate() {
+  showRegenerateConfirm.value = false
+  openGenPanel()
+}
+
+function openGenPanel() {
   genPhase.value = 'idle'
   userPrompt.value = ''
   streamContent.value = ''
