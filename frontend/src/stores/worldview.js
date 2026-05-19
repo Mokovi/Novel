@@ -16,7 +16,7 @@ export const useWorldviewStore = defineStore('worldview', {
       this.loading = true
       try {
         const res = await getWorldview(bookId)
-        this.worldview = res.data?.worldview || res.data || ''
+        this.worldview = res.data?.worldview ?? ''
       } finally {
         this.loading = false
       }
