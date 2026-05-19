@@ -49,13 +49,14 @@
                   class="sidebar-menu"
                 />
 
-                <!-- User + version footer -->
+                <!-- User + version + admin footer -->
                 <div class="sidebar-footer">
                   <div class="footer-row">
                     <span v-if="authStore.user" class="username-text">{{ authStore.user.username }}</span>
                     <n-button size="tiny" quaternary @click="handleLogout">退出</n-button>
                   </div>
                   <div class="footer-row" style="margin-top: 4px">
+                    <n-tag v-if="adminStore.isAdmin" size="tiny" type="warning" bordered style="margin-right: 6px">ADMIN</n-tag>
                     <n-tooltip trigger="hover">
                       <template #trigger>
                         <n-text depth="3" class="version-text">v{{ version }}</n-text>
@@ -66,6 +67,8 @@
                 </div>
               </div>
             </n-layout-sider>
+
+            <AdminLoginModal v-model:show="showAdminModal" @verified="onAdminVerified" @cancel="showAdminModal = false" />
 
             <!-- Main content -->
             <n-layout-content class="main-content">
@@ -93,6 +96,7 @@ import {
   NLayoutSider,
   NMenu,
   NMessageProvider,
+  NTag,
   NText,
   NTooltip,
 } from 'naive-ui'
@@ -101,7 +105,9 @@ import { lightThemeOverrides } from './styles/naive-theme.js'
 import AppIcon from './components/common/AppIcon.vue'
 import BookSelector from './components/common/BookSelector.vue'
 import { useAuthStore } from './stores/auth.js'
+import { useAdminStore } from './stores/admin.js'
 import { useBooksStore } from './stores/books.js'
+import AdminLoginModal from './components/common/AdminLoginModal.vue'
 import DashboardIcon from './assets/icons/DashboardIcon.vue'
 import OutlineIcon from './assets/icons/OutlineIcon.vue'
 import EditorIcon from './assets/icons/EditorIcon.vue'
@@ -113,11 +119,24 @@ import SettingsIcon from './assets/icons/SettingsIcon.vue'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const adminStore = useAdminStore()
 const booksStore = useBooksStore()
 
 const themeOverrides = lightThemeOverrides
 
 const version = ref('')
+const showAdminModal = ref(false)
+
+function handleKeydown(e) {
+  if (e.ctrlKey && e.key === 'u') {
+    e.preventDefault()
+    showAdminModal.value = true
+  }
+}
+
+function onAdminVerified() {
+  // adminStore.isAdmin is already set by AdminLoginModal
+}
 
 const layout = computed(() => {
   return route.meta?.layout || 'app'
@@ -201,11 +220,16 @@ function handleLogout() {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeydown)
   try {
     const res = await fetch('/api/v1/health')
     const data = await res.json()
     version.value = data.version || ''
   } catch { /* health endpoint not available */ }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
 })
 </script>
 
