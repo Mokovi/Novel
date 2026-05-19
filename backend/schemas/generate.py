@@ -10,6 +10,7 @@ class GenerateRequest(BaseModel):
 
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
+    user_prompt: Optional[str] = None
 
 
 class OutlineGenerateRequest(BaseModel):

@@ -15,6 +15,9 @@
           <template #icon><n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/></svg></n-icon></template>
           注入预览
         </n-button>
+        <n-button size="small" type="primary" :loading="store.saving" @click="handleSave">
+          保存
+        </n-button>
       </div>
     </div>
 
@@ -23,65 +26,13 @@
       <n-spin size="medium" />
     </div>
 
-    <!-- Tabs -->
-    <template v-else-if="store.sections.length > 0">
-      <n-tabs type="line" animated class="section-tabs">
-        <n-tab-pane
-          v-for="sec in store.sections"
-          :key="sec.key"
-          :tab="sec.label"
-          :name="sec.key"
-        >
-          <div class="section-content">
-            <!-- Glossary (array of {term, definition}) -->
-            <template v-if="sec.key === '术语表'">
-              <GlossaryEditor
-                :items="glossaryItems"
-                @update:items="onGlossaryUpdate"
-              />
-            </template>
-
-            <!-- Array of objects -->
-            <template v-else-if="Array.isArray(sec.content)">
-              <ArrayEditor
-                :value="sec.content"
-                @update:value="onSectionUpdate(sec.key, $event)"
-              />
-            </template>
-
-            <!-- Object or other -->
-            <template v-else>
-              <ObjectEditor
-                :value="sec.content"
-                @update:value="onSectionUpdate(sec.key, $event)"
-              />
-            </template>
-
-            <!-- Save button per section -->
-            <div class="section-footer">
-              <n-button
-                type="primary"
-                size="small"
-                :loading="store.saving"
-                :disabled="!isSectionDirty(sec.key)"
-                @click="saveSection(sec.key)"
-              >
-                保存 {{ sec.label }}
-              </n-button>
-            </div>
-          </div>
-        </n-tab-pane>
-      </n-tabs>
-    </template>
-
-    <!-- Empty state -->
-    <div v-else class="empty-worldview">
-      <n-empty description="暂无世界观设定">
-        <template #extra>
-          <p class="empty-hint">世界观设定存储在作品级别，请先通过大纲视图中的「全书大纲」生成或手动添加内容。</p>
-          <n-button size="small" @click="refreshData">刷新数据</n-button>
-        </template>
-      </n-empty>
+    <!-- Markdown textarea -->
+    <div v-else class="editor-body">
+      <textarea
+        v-model="store.worldview"
+        class="markdown-textarea"
+        placeholder="在此输入世界观设定（支持 Markdown 格式）&#10;&#10;可以使用 ## 标题、- 列表、**加粗** 等格式"
+      />
     </div>
 
     <!-- Inject preview drawer -->
@@ -114,7 +65,14 @@
             placeholder="补充提示词（可选）：输入您对世界观生成的特定要求..."
           />
           <div v-if="adminStore.isAdmin" style="margin-top:12px">
-            <n-button size="small" quaternary @click="handlePreview">提示词预览</n-button>
+            <n-button size="small" type="warning" ghost @click="handlePreview">
+              <template #icon>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+              </template>
+              提示词预览
+            </n-button>
           </div>
         </div>
         <div v-if="genPhase !== 'idle'" class="gen-output">
@@ -171,9 +129,6 @@ import { marked } from 'marked'
 import { useWorldviewStore } from '../stores/worldview.js'
 import { useAdminStore } from '../stores/admin.js'
 import { generateWorldview, previewWorldviewPrompt } from '../api/generate.js'
-import GlossaryEditor from '../components/worldview/GlossaryEditor.vue'
-import ObjectEditor from '../components/worldview/ObjectEditor.vue'
-import ArrayEditor from '../components/worldview/ArrayEditor.vue'
 
 const route = useRoute()
 const store = useWorldviewStore()
@@ -183,18 +138,6 @@ const message = useMessage()
 const bookId = computed(() => Number(route.params.bookId))
 
 const showPreview = ref(false)
-const dirtySections = ref(new Set())
-
-const glossaryItems = computed({
-  get: () => {
-    const g = store.data['术语表']
-    return Array.isArray(g) ? g : []
-  },
-  set: (val) => {
-    store.updateSection('术语表', val)
-    dirtySections.value.add('术语表')
-  },
-})
 
 const preview = computed(() => ({
   text: store.previewText,
@@ -225,28 +168,13 @@ function renderMarkdown(text) {
   }
 }
 
-function isSectionDirty(key) {
-  return dirtySections.value.has(key)
-}
-
-function onSectionUpdate(key, value) {
-  store.updateSection(key, value)
-  dirtySections.value.add(key)
-}
-
-function onGlossaryUpdate(items) {
-  glossaryItems.value = items
-}
-
-async function saveSection(key) {
-  await store.saveSection(key, bookId.value)
-  dirtySections.value.delete(key)
-  message.success(`${key} 已保存`)
+async function handleSave() {
+  await store.saveAll(bookId.value)
+  message.success('世界观设定已保存')
 }
 
 async function refreshData() {
   await store.fetch(bookId.value)
-  dirtySections.value.clear()
   message.success('已刷新')
 }
 
@@ -350,18 +278,35 @@ async function handlePreview() {
   gap: 8px;
 }
 
-.section-tabs {
-  min-height: 400px;
+.editor-body {
+  min-height: 500px;
 }
 
-.section-content {
-  padding-top: 16px;
+.markdown-textarea {
+  width: 100%;
+  min-height: 500px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--color-text);
+  background: var(--color-bg-editor);
+  resize: vertical;
+  outline: none;
+  transition: border-color var(--transition-fast);
+  box-sizing: border-box;
 }
 
-.section-footer {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--divider-color, #efefef);
+.markdown-textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(201, 169, 78, 0.12);
+}
+
+.markdown-textarea::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.5;
 }
 
 .loading-center {
@@ -382,21 +327,6 @@ async function handlePreview() {
   border-radius: 6px;
   padding: 16px;
   margin: 0;
-}
-
-.empty-worldview {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 300px;
-}
-
-.empty-hint {
-  color: var(--color-text-muted);
-  font-size: 13px;
-  margin: 8px 0 16px;
-  text-align: center;
-  max-width: 360px;
 }
 
 .gen-prompt-section {

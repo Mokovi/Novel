@@ -35,31 +35,15 @@ def _read_json_file(path: Path, default: str) -> str:
     return default
 
 
-def _filter_worldview(worldview: dict, level: str) -> str:
-    """Filter worldview content based on chapter's worldview_level."""
+def _filter_worldview(worldview_text: str, level: str) -> str:
+    """Filter worldview markdown based on chapter's worldview_level."""
     if level == "high":
-        return json.dumps(worldview, ensure_ascii=False, indent=2)
-
+        return worldview_text
     if level == "low":
-        filtered = {"背景": worldview.get("背景", {})}
-        return json.dumps(filtered, ensure_ascii=False, indent=2)
-
-    # medium: include top-level sections that have meaningful content
-    filtered = {}
-    for k, v in worldview.items():
-        if isinstance(v, dict):
-            has_content = any(
-                isinstance(vv, str) and vv.strip()
-                or isinstance(vv, list) and len(vv) > 0
-                for vv in v.values()
-            )
-            if has_content:
-                filtered[k] = v
-        elif isinstance(v, list) and len(v) > 0:
-            filtered[k] = v
-        elif isinstance(v, str) and v.strip():
-            filtered[k] = v
-    return json.dumps(filtered, ensure_ascii=False, indent=2)
+        # Return first ~500 chars as a brief summary
+        return worldview_text[:500] if len(worldview_text) > 500 else worldview_text
+    # medium: return as-is
+    return worldview_text
 
 
 def _format_character_profiles(characters: list) -> str:
@@ -94,21 +78,25 @@ def _get_gen_config() -> dict:
 
 
 def _read_book_worldview(db: Session, book_id: int) -> str:
-    """Load worldview from Book DB record."""
+    """Load worldview from Book DB record (raw markdown)."""
     book = book_repo.get_book(db, book_id)
     if book and book.worldview:
         try:
+            # Try parsing as legacy JSON for migration
             d = json.loads(book.worldview)
+            return _format_worldview_text_dict(d)
         except (json.JSONDecodeError, TypeError):
-            d = {}
+            # Already markdown text
+            return book.worldview
     else:
         # Fallback to legacy file
         raw = _read_json_file(DATA_DIR / "worldview.json", "{}")
         try:
             d = json.loads(raw) if raw.strip() else {}
+            return _format_worldview_text_dict(d) if d else ""
         except json.JSONDecodeError:
-            d = {}
-    return _filter_worldview(d, "medium")
+            return ""
+    return ""
 
 
 def _read_book_writing_style(db: Session, book_id: int) -> str:
@@ -348,19 +336,21 @@ def build_prompt_variables(db: Session, chapter_id: int, book_id: int) -> dict:
 
     # 3. Build variables from Book DB + chapter data
     book = book_repo.get_book(db, book_id)
-    worldview_dict = {}
+    worldview_text = ""
     if book and book.worldview:
         try:
-            worldview_dict = json.loads(book.worldview)
+            d = json.loads(book.worldview)
+            worldview_text = _format_worldview_text_dict(d)
         except (json.JSONDecodeError, TypeError):
-            pass
-    if not worldview_dict:
+            worldview_text = book.worldview
+    if not worldview_text:
         worldview_raw = _read_json_file(DATA_DIR / "worldview.json", "{}")
         try:
-            worldview_dict = json.loads(worldview_raw) if worldview_raw.strip() else {}
+            d = json.loads(worldview_raw) if worldview_raw.strip() else {}
+            worldview_text = _format_worldview_text_dict(d) if d else ""
         except json.JSONDecodeError:
-            worldview_dict = {}
-    worldview_text = _filter_worldview(worldview_dict, chapter.worldview_level or "medium")
+            pass
+    worldview_text = _filter_worldview(worldview_text, chapter.worldview_level or "medium")
 
     writing_style_text = ""
     if book and book.writing_style:
@@ -442,6 +432,7 @@ async def generate_chapter_stream(
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
     user_id: int = 1,
+    user_prompt: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """Async generator yielding SSE events for chapter generation."""
     # Get book_id from volume
@@ -457,6 +448,9 @@ async def generate_chapter_stream(
     if ctx.get("error"):
         yield _sse_event("error", {"message": ctx["error"]})
         return
+
+    if user_prompt:
+        ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + user_prompt
 
     # 6. Stream from LLM
     collected_tokens: list[str] = []
@@ -724,15 +718,17 @@ def build_worldview_prompt_variables(db: Session, book_id: int) -> dict:
     except (FileNotFoundError, ValueError) as e:
         return {"error": str(e)}
 
-    # Read current worldview from Book DB
+    # Read current worldview from Book DB (raw markdown)
     book = book_repo.get_book(db, book_id)
-    worldview_dict = {}
+    current_worldview = ""
     if book and book.worldview:
         try:
-            worldview_dict = json.loads(book.worldview)
+            d = json.loads(book.worldview)
+            current_worldview = _format_worldview_text_dict(d)
         except (json.JSONDecodeError, TypeError):
-            pass
-    current_worldview = _format_worldview_text_dict(worldview_dict) if worldview_dict else "（暂无世界观设定）"
+            current_worldview = book.worldview
+    if not current_worldview:
+        current_worldview = "（暂无世界观设定）"
 
     writing_style_text = ""
     if book and book.writing_style:

@@ -54,18 +54,18 @@
           </button>
           <button
             class="tb-btn tb-generate"
-            :class="{ generating }"
-            :disabled="generating"
+            :class="{ generating: genPhase === 'generating' }"
+            :disabled="genPhase === 'generating'"
             @click="handleGenerate"
           >
-            <svg v-if="!generating" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <svg v-if="genPhase !== 'generating'" width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
             </svg>
-            <span v-if="generating" class="tb-generating-dots">
+            <span v-else class="tb-generating-dots">
               <span /><span /><span />
             </span>
-            <span>{{ generating ? '生成中' : (store.currentChapter?.content ? '重新生成' : 'AI 生成') }}</span>
+            <span>{{ genPhase === 'generating' ? '生成中' : (store.currentChapter?.content ? '重新生成' : 'AI 生成') }}</span>
           </button>
           <button
             class="tb-btn tb-inspector-toggle"
@@ -128,8 +128,26 @@
 
         <!-- Center: Editor -->
         <main class="editor-zone">
-          <!-- Generating overlay -->
-          <div v-if="generating" class="gen-overlay">
+          <!-- Prompt panel (Phase: idle) -->
+          <div v-if="genPhase === 'idle'" class="gen-prompt-panel">
+            <div class="gen-prompt-card">
+              <h3 class="gen-prompt-title">{{ store.currentChapter?.content ? '重新生成章节' : 'AI 生成章节' }}</h3>
+              <p class="gen-prompt-desc">输入补充提示词（可选），或直接点击"开始生成"</p>
+              <textarea
+                v-model="userPrompt"
+                class="gen-prompt-textarea"
+                placeholder="补充提示词（可选）：输入您对本章节内容的特定要求..."
+                rows="4"
+              />
+              <div class="gen-prompt-actions">
+                <button class="gen-btn gen-btn-cancel" @click="cancelGeneration">取消</button>
+                <button class="gen-btn gen-btn-start" @click="startGeneration">开始生成</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Generating overlay (Phase: generating) -->
+          <div v-else-if="genPhase === 'generating'" class="gen-overlay">
             <div class="gen-bar" />
             <div class="gen-stream">
               <div class="gen-stream-header">
@@ -137,18 +155,36 @@
                 <span>AI 正在创作...</span>
               </div>
               <StreamOutput :content="streamContent" :streaming="true" />
+              <div class="gen-stream-footer">
+                <button class="gen-btn gen-btn-cancel gen-btn-sm" @click="cancelGeneration">取消</button>
+              </div>
             </div>
           </div>
 
-          <!-- Paper editor -->
-          <div v-show="!generating" class="paper-wrap">
+          <!-- Done overlay (Phase: done) -->
+          <div v-else-if="genPhase === 'done'" class="gen-overlay">
+            <div class="gen-bar gen-bar-done" />
+            <div class="gen-stream">
+              <div class="gen-stream-header">
+                <span class="gen-stream-dot gen-stream-dot-done" />
+                <span>生成完成</span>
+              </div>
+              <StreamOutput :content="streamContent" :streaming="false" />
+              <div class="gen-stream-footer">
+                <button class="gen-btn gen-btn-start gen-btn-sm" @click="closeGenPanel">关闭</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Paper editor (no gen phase active) -->
+          <div v-show="!genPhase" class="paper-wrap">
             <div class="paper">
               <editor-content :editor="editor" class="paper-editor" />
             </div>
           </div>
 
           <!-- Download floating button -->
-          <button v-if="!generating && store.currentChapter?.content" class="fab-download" @click="handleDownload" title="下载为 TXT">
+          <button v-if="!genPhase && store.currentChapter?.content" class="fab-download" @click="handleDownload" title="下载为 TXT">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M3 10v3h10v-3M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -197,6 +233,16 @@
                   <path d="M4 9l3-3-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" :class="{ rotated: expandedSections.aiSummary }" class="is-chevron"/>
                 </svg>
                 <span>AI 摘要</span>
+                <button
+                  v-if="store.currentChapter?.content"
+                  class="is-regenerate-btn"
+                  title="重新生成摘要"
+                  @click.stop="handleRegenerateSummary"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M1 2v4h4M11 10V6H7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
               </button>
               <div v-show="expandedSections.aiSummary" class="is-section-body">
                 <textarea
@@ -261,8 +307,8 @@
                 <!-- Admin preview -->
                 <div v-if="adminStore.isAdmin" class="is-field" style="margin-top:12px">
                   <button class="is-preview-btn" @click="handlePreviewPrompt">
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <path d="M2 4h10M2 7h10M2 10h7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                     </svg>
                     提示词预览
                   </button>
@@ -316,7 +362,7 @@ import { useMessage } from 'naive-ui'
 import { useChaptersStore } from '../stores/chapters.js'
 import { updateChapter, deleteChapter, downloadChapter, getChapterCharacters, setChapterCharacters } from '../api/chapters.js'
 import { listCharacters } from '../api/characters.js'
-import { generateChapter, previewPrompt } from '../api/generate.js'
+import { generateChapter, previewPrompt, regenerateSummary } from '../api/generate.js'
 import { useAdminStore } from '../stores/admin.js'
 import StreamOutput from '../components/common/StreamOutput.vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
@@ -343,8 +389,9 @@ const editor = useEditor({
 })
 
 // ── State ──
-const generating = ref(false)
+const genPhase = ref(null) // null | 'idle' | 'generating' | 'done'
 const streamContent = ref('')
+const userPrompt = ref('')
 let abortController = null
 
 const showPreviewModal = ref(false)
@@ -413,6 +460,7 @@ watch(
       syncEditBuffers()
       if (route.query.generate === '1') {
         router.replace({ path: route.path, params: route.params })
+        // Trigger the prompt panel; user must click "开始生成" to proceed
         handleGenerate()
       }
     }
@@ -489,8 +537,14 @@ async function handleGenerate() {
     const ok = window.confirm('章节已有内容，重新生成将覆盖现有内容。确定继续？')
     if (!ok) return
   }
+  genPhase.value = 'idle'
+  userPrompt.value = ''
+  streamContent.value = ''
+}
 
-  generating.value = true
+function startGeneration() {
+  if (!store.currentChapter) return
+  genPhase.value = 'generating'
   streamContent.value = ''
 
   abortController = generateChapter(
@@ -504,17 +558,31 @@ async function handleGenerate() {
         editAiSummary.value = summary
       },
       onDone: async () => {
-        generating.value = false
+        genPhase.value = 'done'
         message.success('生成完成')
         await store.selectChapter(store.currentChapter.id)
         syncEditBuffers()
       },
       onError: (msg) => {
-        generating.value = false
+        genPhase.value = 'done'
         message.error(`生成失败: ${msg}`)
       },
     },
+    { user_prompt: userPrompt.value },
   )
+}
+
+function cancelGeneration() {
+  abortController?.abort()
+  genPhase.value = null
+  streamContent.value = ''
+  userPrompt.value = ''
+}
+
+function closeGenPanel() {
+  genPhase.value = null
+  streamContent.value = ''
+  userPrompt.value = ''
 }
 
 async function handleSaveAiSummary() {
@@ -523,6 +591,20 @@ async function handleSaveAiSummary() {
     await updateChapter(store.currentChapter.id, { ai_summary: editAiSummary.value })
   } catch (e) {
     console.error('Failed to save AI summary:', e)
+  }
+}
+
+async function handleRegenerateSummary() {
+  if (!store.currentChapter?.content) {
+    message.warning('章节暂无内容，无法生成摘要')
+    return
+  }
+  try {
+    const res = await regenerateSummary(store.currentChapter.id)
+    editAiSummary.value = res.summary
+    message.success('摘要已重新生成')
+  } catch (e) {
+    message.error(`摘要生成失败: ${e.message}`)
   }
 }
 
@@ -1050,8 +1132,120 @@ onBeforeUnmount(() => {
 }
 
 /* ==============================
-   GENERATING OVERLAY
+   GENERATING OVERLAY + PROMPT PANEL
    ============================== */
+.gen-prompt-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: var(--color-bg-page);
+}
+
+.gen-prompt-card {
+  max-width: 520px;
+  width: 100%;
+  background: #fff;
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04);
+  border: 1px solid var(--color-border-light);
+}
+
+.gen-prompt-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 6px;
+}
+
+.gen-prompt-desc {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 0 0 16px;
+}
+
+.gen-prompt-textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: var(--font-ui);
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+  resize: vertical;
+  outline: none;
+  transition: border-color var(--transition-fast);
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+.gen-prompt-textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(201, 169, 78, 0.12);
+}
+
+.gen-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.gen-btn {
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--color-border);
+}
+
+.gen-btn-sm {
+  padding: 6px 14px;
+  font-size: 12px;
+}
+
+.gen-btn-cancel {
+  background: #fff;
+  color: var(--color-text-secondary);
+}
+.gen-btn-cancel:hover {
+  border-color: var(--color-text-muted);
+  color: var(--color-text-primary);
+}
+
+.gen-btn-start {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+.gen-btn-start:hover {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent-light);
+}
+
+.gen-stream-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  flex-shrink: 0;
+}
+
+.gen-bar-done {
+  background: linear-gradient(90deg, transparent, var(--color-success), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.gen-stream-dot-done {
+  background: var(--color-success);
+  animation: none;
+}
+
 .gen-overlay {
   flex: 1;
   display: flex;
@@ -1312,15 +1506,34 @@ onBeforeUnmount(() => {
 }
 .is-chip-remove:hover { opacity: 1; }
 
+.is-regenerate-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 3px 6px;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.is-regenerate-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+  background: rgba(201, 169, 78, 0.06);
+}
+
 .is-preview-btn {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
   padding: 8px 12px;
-  background: none;
-  border: 1px dashed var(--color-border);
-  color: var(--color-text-secondary);
+  background: rgba(230, 162, 60, 0.06);
+  border: 1px dashed var(--color-warning, #e6a23c);
+  color: var(--color-warning, #e6a23c);
   font-size: 12px;
   font-family: var(--font-ui);
   cursor: pointer;
@@ -1328,9 +1541,8 @@ onBeforeUnmount(() => {
   transition: all var(--transition-fast);
 }
 .is-preview-btn:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent-dark);
-  background: rgba(201, 169, 78, 0.04);
+  background: var(--color-warning, #e6a23c);
+  color: #fff;
 }
 
 /* ==============================

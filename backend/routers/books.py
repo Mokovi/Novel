@@ -94,17 +94,11 @@ def get_book_worldview(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get a book's worldview JSON."""
+    """Get a book's worldview markdown."""
     book = book_repo.get_book_for_user(db, book_id, current_user.id)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    import json
-    if book.worldview:
-        try:
-            return json.loads(book.worldview)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return {}
+    return {"worldview": book.worldview or ""}
 
 
 @router.put("/{book_id}/worldview")
@@ -114,14 +108,13 @@ def update_book_worldview(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update a book's worldview (stored as JSON text)."""
+    """Update a book's worldview (stored as markdown text)."""
     book = book_repo.get_book_for_user(db, book_id, current_user.id)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    import json
-    book.worldview = json.dumps(body, ensure_ascii=False)
+    book.worldview = body.get("worldview", "")
     db.commit()
-    return body
+    return {"worldview": book.worldview}
 
 
 @router.get("/{book_id}/writing-style")

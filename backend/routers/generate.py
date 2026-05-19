@@ -36,7 +36,7 @@ async def generate_chapter(
 ):
     """Stream chapter generation via SSE."""
     return StreamingResponse(
-        generate_chapter_stream(db, chapter_id, body.temperature, body.max_tokens, current_user.id),
+        generate_chapter_stream(db, chapter_id, body.temperature, body.max_tokens, current_user.id, body.user_prompt),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -296,26 +296,7 @@ async def generate_worldview(
         if full_content:
             book = book_repo.get_book_for_user(db, book_id, current_user.id)
             if book:
-                try:
-                    parsed = json.loads(full_content)
-                    current = {}
-                    if book.worldview:
-                        try:
-                            current = json.loads(book.worldview)
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-                    current.update(parsed)
-                    book.worldview = json.dumps(current, ensure_ascii=False)
-                except (json.JSONDecodeError, TypeError):
-                    # Fallback: store raw content under a generated key
-                    current = {}
-                    if book.worldview:
-                        try:
-                            current = json.loads(book.worldview)
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-                    current["生成内容"] = full_content
-                    book.worldview = json.dumps(current, ensure_ascii=False)
+                book.worldview = full_content
                 db.commit()
 
     return StreamingResponse(
