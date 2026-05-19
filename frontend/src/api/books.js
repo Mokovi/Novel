@@ -1,8 +1,7 @@
-import axios from 'axios'
-
-const http = axios.create({
-  baseURL: '/api/v1',
-})
+/**
+ * Books API.
+ */
+import http from './http'
 
 export function listBooks() {
   return http.get('/books')
@@ -28,29 +27,26 @@ export function getBookStats(id) {
   return http.get(`/books/${id}/stats`)
 }
 
-// Worldview sub-routes
-export function getBookWorldview(bookId) {
-  return http.get(`/books/${bookId}/worldview`)
+export function getBookWorldview(id) {
+  return http.get(`/books/${id}/worldview`)
 }
 
-export function updateBookWorldview(bookId, worldviewStr) {
-  return http.put(`/books/${bookId}/worldview`, { worldview: worldviewStr })
+export function updateBookWorldview(id, data) {
+  return http.put(`/books/${id}/worldview`, data)
 }
 
-// Outline sub-routes
-export function getBookOutline(bookId) {
-  return http.get(`/books/${bookId}/outline`)
+export function getBookWritingStyle(id) {
+  return http.get(`/books/${id}/writing-style`)
 }
 
-export function updateBookOutline(bookId, outline) {
-  return http.put(`/books/${bookId}/outline`, { outline })
+export function updateBookWritingStyle(id, data) {
+  return http.put(`/books/${id}/writing-style`, data)
 }
 
-// Writing style sub-routes
-export function getBookWritingStyle(bookId) {
-  return http.get(`/books/${bookId}/writing-style`)
+export function getBookOutline(id) {
+  return http.get(`/books/${id}/outline`)
 }
 
-export function updateBookWritingStyle(bookId, writingStyleStr) {
-  return http.put(`/books/${bookId}/writing-style`, { writing_style: writingStyleStr })
+export function updateBookOutline(id, data) {
+  return http.put(`/books/${id}/outline`, data)
 }

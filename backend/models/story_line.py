@@ -12,8 +12,8 @@ class StoryLine(Base):
     __tablename__ = "story_lines"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    book_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=True
+    book_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

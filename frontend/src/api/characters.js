@@ -1,19 +1,15 @@
-import axios from 'axios'
+import http from './http'
 
-const http = axios.create({
-  baseURL: '/api/v1',
-})
-
-export function listCharacters(params = {}) {
-  return http.get('/characters', { params })
+export function listCharacters(bookId, params = {}) {
+  return http.get('/characters', { params: { book_id: bookId, ...params } })
 }
 
 export function getCharacter(id) {
   return http.get(`/characters/${id}`)
 }
 
-export function createCharacter(data) {
-  return http.post('/characters', data)
+export function createCharacter(data, bookId) {
+  return http.post('/characters', data, { params: { book_id: bookId } })
 }
 
 export function updateCharacter(id, data) {
@@ -24,8 +20,8 @@ export function deleteCharacter(id) {
   return http.delete(`/characters/${id}`)
 }
 
-export function getRelationsGraph() {
-  return http.get('/characters/relations')
+export function getRelationsGraph(bookId) {
+  return http.get('/characters/relations', { params: { book_id: bookId } })
 }
 
 export function createRelation(data) {

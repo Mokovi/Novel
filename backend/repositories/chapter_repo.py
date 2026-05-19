@@ -17,15 +17,15 @@ from backend.schemas.chapter import (
 )
 
 
-def list_volumes(db: Session, book_id: Optional[int] = None) -> list[Volume]:
+def list_volumes(db: Session, book_id: int | None = None) -> list[Volume]:
     query = db.query(Volume)
     if book_id is not None:
         query = query.filter(Volume.book_id == book_id)
     return query.order_by(Volume.sort_order, Volume.id).all()
 
 
-def create_volume(db: Session, data: VolumeCreate) -> Volume:
-    volume = Volume(**data.model_dump())
+def create_volume(db: Session, data: VolumeCreate, book_id: int = 1) -> Volume:
+    volume = Volume(**data.model_dump(), book_id=book_id)
     db.add(volume)
     db.commit()
     db.refresh(volume)
@@ -34,16 +34,16 @@ def create_volume(db: Session, data: VolumeCreate) -> Volume:
 
 def list_chapters(
     db: Session,
+    book_id: int | None = None,
     volume_id: Optional[int] = None,
-    book_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[Chapter]:
-    query = db.query(Chapter)
+    query = db.query(Chapter).join(Volume)
+    if book_id is not None:
+        query = query.filter(Volume.book_id == book_id)
     if volume_id is not None:
         query = query.filter(Chapter.volume_id == volume_id)
-    if book_id is not None:
-        query = query.join(Chapter.volume).filter(Volume.book_id == book_id)
     return query.order_by(Chapter.sort_order, Chapter.id).offset(skip).limit(limit).all()
 
 
@@ -201,12 +201,18 @@ def set_chapter_characters(db: Session, chapter_id: int, character_ids: list[int
 # ── Arc CRUD ───────────────────────────────────────────────
 
 
-def list_arcs(db: Session, volume_id: Optional[int] = None, book_id: Optional[int] = None) -> list[Arc]:
+def list_arcs(db: Session, volume_id: Optional[int] = None) -> list[Arc]:
     query = db.query(Arc)
     if volume_id is not None:
         query = query.filter(Arc.volume_id == volume_id)
-    if book_id is not None:
-        query = query.join(Arc.volume).filter(Volume.book_id == book_id)
+    return query.order_by(Arc.sort_order, Arc.id).all()
+
+
+def list_arcs_by_book(db: Session, book_id: int, volume_id: int | None = None) -> list[Arc]:
+    """List arcs filtered by book (and optionally volume)."""
+    query = db.query(Arc).join(Volume, Arc.volume_id == Volume.id).filter(Volume.book_id == book_id)
+    if volume_id is not None:
+        query = query.filter(Arc.volume_id == volume_id)
     return query.order_by(Arc.sort_order, Arc.id).all()
 
 
@@ -315,12 +321,12 @@ def get_volume_arc_outlines(db: Session, volume_id: int) -> list[dict]:
     return result
 
 
-def get_all_volume_outlines(db: Session, book_id: Optional[int] = None) -> list[dict]:
+def get_all_volume_outlines(db: Session, book_id: int | None = None) -> list[dict]:
     """Get all volumes with their outline for book-level generation."""
-    query = db.query(Volume)
+    query = db.query(Volume).order_by(Volume.sort_order, Volume.id)
     if book_id is not None:
         query = query.filter(Volume.book_id == book_id)
-    volumes = query.order_by(Volume.sort_order, Volume.id).all()
+    volumes = query.all()
     return [
         {
             "volume_id": v.id,

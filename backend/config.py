@@ -33,3 +33,7 @@ def get_env(key: str, default: str | None = None) -> str | None:
 
 def get_admin_password() -> str:
     return os.getenv("ADMIN_PASSWORD", "root")
+
+
+def get_jwt_secret() -> str:
+    return os.getenv("JWT_SECRET", "change-me-in-production")

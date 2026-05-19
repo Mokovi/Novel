@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models.api_plan import ApiPlan, PlanApi
 from backend.models.model_api import ModelApi
+from backend.models.user import User
+from backend.routers.deps import get_current_user
 from backend.schemas.api_plan import (
     ApiPlanCreate,
     ApiPlanResponse,
@@ -52,22 +54,33 @@ def _sync_plan_apis(db: Session, plan_id: int, api_ids: list[int]):
 
 
 @router.get("/api-plans", response_model=list[ApiPlanResponse])
-def list_plans(db: Session = Depends(get_db)):
-    plans = db.query(ApiPlan).order_by(ApiPlan.id).all()
+def list_plans(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    plans = db.query(ApiPlan).filter(ApiPlan.user_id == current_user.id).order_by(ApiPlan.id).all()
     return [_build_plan_response(p, db) for p in plans]
 
 
 @router.get("/api-plans/{plan_id}", response_model=ApiPlanResponse)
-def get_plan(plan_id: int, db: Session = Depends(get_db)):
-    plan = db.query(ApiPlan).filter(ApiPlan.id == plan_id).first()
+def get_plan(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    plan = db.query(ApiPlan).filter(ApiPlan.id == plan_id, ApiPlan.user_id == current_user.id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     return _build_plan_response(plan, db)
 
 
 @router.post("/api-plans", response_model=ApiPlanResponse, status_code=201)
-def create_plan(body: ApiPlanCreate, db: Session = Depends(get_db)):
-    plan = ApiPlan(name=body.name, description=body.description)
+def create_plan(
+    body: ApiPlanCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    plan = ApiPlan(user_id=current_user.id, name=body.name, description=body.description)
     db.add(plan)
     db.flush()
     _sync_plan_apis(db, plan.id, body.api_ids)
@@ -77,8 +90,13 @@ def create_plan(body: ApiPlanCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/api-plans/{plan_id}", response_model=ApiPlanResponse)
-def update_plan(plan_id: int, body: ApiPlanUpdate, db: Session = Depends(get_db)):
-    plan = db.query(ApiPlan).filter(ApiPlan.id == plan_id).first()
+def update_plan(
+    plan_id: int,
+    body: ApiPlanUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    plan = db.query(ApiPlan).filter(ApiPlan.id == plan_id, ApiPlan.user_id == current_user.id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
 
@@ -96,8 +114,12 @@ def update_plan(plan_id: int, body: ApiPlanUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/api-plans/{plan_id}", status_code=204)
-def delete_plan(plan_id: int, db: Session = Depends(get_db)):
-    plan = db.query(ApiPlan).filter(ApiPlan.id == plan_id).first()
+def delete_plan(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    plan = db.query(ApiPlan).filter(ApiPlan.id == plan_id, ApiPlan.user_id == current_user.id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     db.delete(plan)

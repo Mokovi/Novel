@@ -1,127 +1,58 @@
 <template>
   <div class="book-selector">
-    <n-popselect
-      v-model:value="selectedId"
-      :options="bookOptions"
-      trigger="click"
-      @update:value="onSelect"
-      :width="200"
+    <n-button
+      v-if="booksStore.currentBook"
+      quaternary
+      class="book-selector-btn"
+      @click="goToBookSelect"
     >
-      <div class="book-selector-trigger">
-        <span class="book-name">{{ currentName }}</span>
-        <span class="book-arrow">▾</span>
-      </div>
-    </n-popselect>
-
-    <!-- Add Book Modal -->
-    <n-modal v-model:show="showAddModal" preset="card" title="新建作品" style="width: 400px">
-      <n-input
-        v-model:value="newBookName"
-        placeholder="输入作品名称"
-        @keyup.enter="confirmAdd"
-      />
-      <template #footer>
-        <n-button type="primary" :loading="adding" @click="confirmAdd">创建</n-button>
+      <template #icon>
+        <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
+          <path d="M4 19.5A2.5 2.5 0 016.5 17H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </template>
-    </n-modal>
+      <span class="book-name">{{ booksStore.currentBook.name }}</span>
+      <span class="switch-hint">切换</span>
+    </n-button>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { NButton } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { useBooksStore } from '../../stores/books.js'
 
 const router = useRouter()
 const booksStore = useBooksStore()
 
-const showAddModal = ref(false)
-const newBookName = ref('')
-const adding = ref(false)
-
-const selectedId = computed({
-  get: () => booksStore.currentBookId,
-  set: () => {},
-})
-
-const currentName = computed(() => {
-  return booksStore.currentBook?.name || '选择作品'
-})
-
-const bookOptions = computed(() => {
-  const options = booksStore.books.map((b) => ({
-    label: b.name,
-    value: b.id,
-  }))
-  options.push({
-    label: '---',
-    value: null,
-    disabled: true,
-  })
-  options.push({
-    label: '✚ 新建作品',
-    value: '__add__',
-  })
-  return options
-})
-
-function onSelect(val) {
-  if (val === '__add__') {
-    showAddModal.value = true
-    return
-  }
-  if (val && val !== booksStore.currentBookId) {
-    router.push(`/books/${val}/outline`)
-  }
-}
-
-async function confirmAdd() {
-  if (!newBookName.value.trim()) return
-  adding.value = true
-  try {
-    const book = await booksStore.addBook(newBookName.value.trim())
-    newBookName.value = ''
-    showAddModal.value = false
-    router.push(`/books/${book.id}/outline`)
-  } finally {
-    adding.value = false
-  }
+function goToBookSelect() {
+  booksStore.clearCurrentBook()
+  router.push('/books')
 }
 </script>
 
 <style scoped>
 .book-selector {
   padding: 8px 12px;
+  border-bottom: 1px solid #2a2520;
 }
-
-.book-selector-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 6px;
-  transition: background var(--transition-base);
+.book-selector-btn {
+  width: 100%;
+  justify-content: flex-start;
+  color: var(--color-text-on-dark) !important;
 }
-
-.book-selector-trigger:hover {
-  background: var(--color-bg-hover, rgba(255, 255, 255, 0.05));
-}
-
 .book-name {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary);
+  flex: 1;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 140px;
+  font-size: 13px;
 }
-
-.book-arrow {
-  font-size: 10px;
-  color: var(--color-text-secondary);
-  margin-left: 6px;
+.switch-hint {
+  font-size: 11px;
+  opacity: 0.5;
+  margin-left: 4px;
 }
 </style>

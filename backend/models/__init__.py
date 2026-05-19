@@ -8,6 +8,7 @@ from backend.models.event import EventParticipant, WorldEvent
 from backend.models.item import Item, ItemOwnershipHistory
 from backend.models.model_api import ModelApi
 from backend.models.story_line import ChapterCharacter, ChapterStoryLine, StoryLine
+from backend.models.user import User
 
 __all__ = [
     "ApiPlan",
@@ -26,6 +27,7 @@ __all__ = [
     "PlanApi",
     "StoryLine",
     "TaskPlanBinding",
+    "User",
     "Volume",
     "WorldEvent",
 ]

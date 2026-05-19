@@ -70,20 +70,16 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
-import { listCharacters, listBookCharacters } from '../api/characters.js'
-import { useBooksStore } from '../stores/books.js'
+import { listCharacters } from '../api/characters.js'
 import CharacterForm from '../components/character/CharacterForm.vue'
 
-const route = useRoute()
 const router = useRouter()
+const route = useRoute()
 const message = useMessage()
-const booksStore = useBooksStore()
 
-const bookId = computed(() => {
-  return route.params.bookId ? Number(route.params.bookId) : booksStore.currentBookId
-})
+const bookId = computed(() => Number(route.params.bookId))
 
 const characters = ref([])
 const loading = ref(false)
@@ -110,10 +106,7 @@ async function fetchCharacters() {
   try {
     const params = {}
     if (roleFilter.value) params.role_type = roleFilter.value
-    const bId = bookId.value
-    const res = bId
-      ? await listBookCharacters(bId, params)
-      : await listCharacters(params)
+    const res = await listCharacters(bookId.value, params)
     characters.value = res.data
   } catch {
     message.error('加载人物列表失败')
@@ -127,12 +120,7 @@ function onFilterChange() {
 }
 
 function openDetail(id) {
-  const bId = bookId.value
-  if (bId) {
-    router.push({ name: 'book-character-detail', params: { bookId: bId, id } })
-  } else {
-    router.push({ name: 'character-detail', params: { id } })
-  }
+  router.push(`/books/${bookId.value}/characters/${id}`)
 }
 
 function onCreated() {
@@ -141,13 +129,7 @@ function onCreated() {
   message.success('人物创建成功')
 }
 
-onMounted(async () => {
-  const bId = bookId.value
-  if (bId && !booksStore.currentBook) {
-    try { await booksStore.selectBook(bId) } catch {}
-  }
-  await fetchCharacters()
-})
+onMounted(fetchCharacters)
 </script>
 
 <style scoped>

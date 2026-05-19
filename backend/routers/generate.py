@@ -1,10 +1,12 @@
 """SSE streaming endpoints for chapter and outline generation."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
+from backend.models.user import User
+from backend.routers.deps import get_current_user
 from backend.repositories import chapter_repo
 from backend.schemas.generate import GenerateRequest, OutlineGenerateRequest
 from backend.services.generator import (
@@ -28,18 +30,11 @@ async def generate_chapter(
     chapter_id: int,
     body: GenerateRequest = GenerateRequest(),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Stream chapter generation via SSE.
-
-    Returns a ``text/event-stream`` response. Each event is a JSON line::
-
-        data: {"event": "start", "model": "...", "token_estimate": N}
-        data: {"event": "token", "token": "..."}
-        data: {"event": "done", "word_count": N, "model": "..."}
-        data: {"event": "error", "message": "..."}
-    """
+    """Stream chapter generation via SSE."""
     return StreamingResponse(
-        generate_chapter_stream(db, chapter_id, body.temperature, body.max_tokens),
+        generate_chapter_stream(db, chapter_id, body.temperature, body.max_tokens, current_user.id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -51,10 +46,12 @@ async def generate_chapter(
 @router.post("/chapter/{chapter_id}/preview")
 async def preview_chapter_prompt(
     chapter_id: int,
+    book_id: int = Query(..., description="Book ID for context"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Return assembled prompt and metadata for a chapter without generating."""
-    ctx = build_prompt_variables(db, chapter_id)
+    ctx = build_prompt_variables(db, chapter_id, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
     return {
@@ -69,6 +66,7 @@ async def preview_chapter_prompt(
 async def regenerate_chapter_summary(
     chapter_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Regenerate the AI summary for a chapter (non-streaming)."""
     chapter = chapter_repo.get_chapter(db, chapter_id)
@@ -91,11 +89,13 @@ async def regenerate_chapter_summary(
 @router.post("/arc/{arc_id}")
 async def generate_arc_outline(
     arc_id: int,
+    book_id: int = Query(..., description="Book ID for context"),
     body: OutlineGenerateRequest = OutlineGenerateRequest(),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Stream arc outline generation via SSE."""
-    ctx = build_arc_prompt_variables(db, arc_id)
+    ctx = build_arc_prompt_variables(db, arc_id, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
     if body.user_prompt:
@@ -105,7 +105,6 @@ async def generate_arc_outline(
         full_content = ""
         async for event in generate_outline_stream(db, ctx):
             yield event
-            # Capture the done event content to save
             import json
             if event.startswith("data: "):
                 try:
@@ -127,10 +126,12 @@ async def generate_arc_outline(
 @router.post("/arc/{arc_id}/preview")
 async def preview_arc_prompt(
     arc_id: int,
+    book_id: int = Query(..., description="Book ID for context"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Return assembled prompt and metadata for an arc without generating."""
-    ctx = build_arc_prompt_variables(db, arc_id)
+    ctx = build_arc_prompt_variables(db, arc_id, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
     return {
@@ -147,11 +148,13 @@ async def preview_arc_prompt(
 @router.post("/volume/{volume_id}")
 async def generate_volume_outline(
     volume_id: int,
+    book_id: int = Query(..., description="Book ID for context"),
     body: OutlineGenerateRequest = OutlineGenerateRequest(),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Stream volume outline generation via SSE."""
-    ctx = build_volume_prompt_variables(db, volume_id)
+    ctx = build_volume_prompt_variables(db, volume_id, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
     if body.user_prompt:
@@ -182,10 +185,12 @@ async def generate_volume_outline(
 @router.post("/volume/{volume_id}/preview")
 async def preview_volume_prompt(
     volume_id: int,
+    book_id: int = Query(..., description="Book ID for context"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Return assembled prompt and metadata for a volume without generating."""
-    ctx = build_volume_prompt_variables(db, volume_id)
+    ctx = build_volume_prompt_variables(db, volume_id, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
     return {
@@ -201,11 +206,13 @@ async def preview_volume_prompt(
 
 @router.post("/book")
 async def generate_book_outline(
+    book_id: int = Query(..., description="Book ID"),
     body: OutlineGenerateRequest = OutlineGenerateRequest(),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Stream book-level outline generation via SSE."""
-    ctx = build_book_prompt_variables(db)
+    ctx = build_book_prompt_variables(db, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=400, detail=ctx["error"])
     if body.user_prompt:
@@ -224,10 +231,11 @@ async def generate_book_outline(
                 except (json.JSONDecodeError, KeyError, IndexError):
                     pass
         if full_content:
-            from backend.config import load_config, save_config
-            cfg = load_config()
-            cfg["book_outline"] = full_content
-            save_config(cfg)
+            from backend.repositories import book_repo as br
+            book = br.get_book_for_user(db, book_id, current_user.id)
+            if book:
+                book.outline = full_content
+                db.commit()
 
     return StreamingResponse(
         _stream_and_save(),
@@ -238,10 +246,12 @@ async def generate_book_outline(
 
 @router.post("/book/preview")
 async def preview_book_prompt(
+    book_id: int = Query(..., description="Book ID"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Return assembled prompt and metadata for the book outline without generating."""
-    ctx = build_book_prompt_variables(db)
+    ctx = build_book_prompt_variables(db, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=400, detail=ctx["error"])
     return {
@@ -250,4 +260,3 @@ async def preview_book_prompt(
         "model": ctx["model_name"],
         "template_name": ctx["template_name"],
     }
-

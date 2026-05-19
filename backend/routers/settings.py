@@ -1,9 +1,13 @@
-"""System settings endpoints — generation config, book outline, etc."""
+"""System settings endpoints — generation config, etc."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from backend.config import load_config, save_config
+from backend.database import get_db
+from backend.models.user import User
+from backend.routers.deps import get_current_user
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
@@ -15,7 +19,9 @@ class GenerationSettings(BaseModel):
 
 
 @router.get("/generation", response_model=GenerationSettings)
-def get_generation_settings():
+def get_generation_settings(
+    current_user: User = Depends(get_current_user),
+):
     """Return the current generation configuration."""
     cfg = load_config()
     gen = cfg.get("generation", {})
@@ -27,7 +33,10 @@ def get_generation_settings():
 
 
 @router.put("/generation", response_model=GenerationSettings)
-def update_generation_settings(body: GenerationSettings):
+def update_generation_settings(
+    body: GenerationSettings,
+    current_user: User = Depends(get_current_user),
+):
     """Update the generation configuration."""
     cfg = load_config()
     cfg["generation"] = {
@@ -35,28 +44,5 @@ def update_generation_settings(body: GenerationSettings):
         "outline_generation_count": body.outline_generation_count,
         "outline_injection_depth": body.outline_injection_depth,
     }
-    save_config(cfg)
-    return body
-
-
-# ── Book outline ────────────────────────────────────────────
-
-
-class BookOutlineResponse(BaseModel):
-    book_outline: str = ""
-
-
-@router.get("/book-outline", response_model=BookOutlineResponse)
-def get_book_outline():
-    """Return the current book-level outline."""
-    cfg = load_config()
-    return BookOutlineResponse(book_outline=cfg.get("book_outline", ""))
-
-
-@router.put("/book-outline", response_model=BookOutlineResponse)
-def update_book_outline(body: BookOutlineResponse):
-    """Update the book-level outline."""
-    cfg = load_config()
-    cfg["book_outline"] = body.book_outline
     save_config(cfg)
     return body

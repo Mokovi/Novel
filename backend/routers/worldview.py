@@ -1,12 +1,20 @@
-"""REST endpoints for worldview settings (JSON file-based storage)."""
+"""REST endpoints for worldview settings — now per-book via books router.
+
+Deprecated: these file-based endpoints remain for backward compatibility
+but new clients should use ``GET /api/v1/books/{book_id}/worldview``.
+"""
 
 import json
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.config import DATA_DIR
+from backend.database import get_db
+from backend.models.user import User
+from backend.repositories import book_repo
+from backend.routers.deps import get_current_user
 from backend.services.prompt_builder import estimate_tokens
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/v1/worldview", tags=["worldview"])
 
@@ -66,8 +74,22 @@ def _format_worldview_text(data: dict) -> str:
 
 
 @router.get("")
-def get_worldview():
-    """Return the full worldview settings."""
+def get_worldview(
+    book_id: int | None = Query(None, description="Book ID for per-book worldview"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return worldview settings — from book if book_id given, else legacy file."""
+    if book_id is not None:
+        book = book_repo.get_book_for_user(db, book_id, current_user.id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Book not found")
+        if book.worldview:
+            try:
+                return json.loads(book.worldview)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return {}
     return _read_worldview()
 
 
@@ -75,14 +97,30 @@ def get_worldview():
 def update_worldview(
     body: dict,
     section: str = Query(None, description="Section key to update (e.g. '背景'). If omitted, replaces the entire worldview."),
+    book_id: int | None = Query(None, description="Book ID for per-book worldview"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Update worldview settings.
+    """Update worldview settings."""
+    if book_id is not None:
+        book = book_repo.get_book_for_user(db, book_id, current_user.id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Book not found")
+        current = {}
+        if book.worldview:
+            try:
+                current = json.loads(book.worldview)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if section:
+            current[section] = body
+        else:
+            current = body
+        book.worldview = json.dumps(current, ensure_ascii=False)
+        db.commit()
+        return current
 
-    If ``section`` is provided, only that section is updated (partial update).
-    Otherwise the entire worldview is replaced.
-    """
     current = _read_worldview()
-
     if section:
         if section not in current:
             raise HTTPException(status_code=400, detail=f"Unknown section: {section}")
@@ -95,12 +133,24 @@ def update_worldview(
 
 
 @router.get("/inject-preview")
-def inject_preview():
-    """Preview how the worldview will appear when injected into a prompt.
-
-    Returns the formatted text and estimated token count.
-    """
-    data = _read_worldview()
+def inject_preview(
+    book_id: int | None = Query(None, description="Book ID for per-book worldview"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Preview how the worldview will appear when injected into a prompt."""
+    if book_id is not None:
+        book = book_repo.get_book_for_user(db, book_id, current_user.id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Book not found")
+        data = {}
+        if book.worldview:
+            try:
+                data = json.loads(book.worldview)
+            except (json.JSONDecodeError, TypeError):
+                pass
+    else:
+        data = _read_worldview()
     text = _format_worldview_text(data)
     return {
         "text": text,

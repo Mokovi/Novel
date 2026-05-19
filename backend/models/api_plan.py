@@ -12,6 +12,9 @@ class ApiPlan(Base):
     __tablename__ = "api_plans"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     round_robin_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { getWorldview, updateWorldview, getInjectPreview } from '../api/worldview.js'
-import * as booksApi from '../api/books.js'
 
 export const useWorldviewStore = defineStore('worldview', {
   state: () => ({
@@ -10,7 +9,6 @@ export const useWorldviewStore = defineStore('worldview', {
     previewText: '',
     previewTokenEstimate: 0,
     previewLoading: false,
-    _bookId: null,
   }),
 
   getters: {
@@ -26,56 +24,40 @@ export const useWorldviewStore = defineStore('worldview', {
   },
 
   actions: {
-    setBookId(bookId) {
-      this._bookId = bookId
-    },
-
-    async fetch() {
+    async fetch(bookId) {
       this.loading = true
       try {
-        const res = this._bookId
-          ? await booksApi.getBookWorldview(this._bookId)
-          : await getWorldview()
+        const res = await getWorldview(bookId)
         this.data = res.data
       } finally {
         this.loading = false
       }
     },
 
-    async saveSection(sectionKey) {
+    async saveSection(sectionKey, bookId) {
       const content = this.data[sectionKey]
       if (content === undefined) return
       this.saving = true
       try {
-        if (this._bookId) {
-          const full = { ...this.data }
-          full[sectionKey] = content
-          await booksApi.updateBookWorldview(this._bookId, JSON.stringify(full))
-        } else {
-          await updateWorldview(content, sectionKey)
-        }
+        await updateWorldview(content, sectionKey, bookId)
       } finally {
         this.saving = false
       }
     },
 
-    async saveAll() {
+    async saveAll(bookId) {
       this.saving = true
       try {
-        if (this._bookId) {
-          await booksApi.updateBookWorldview(this._bookId, JSON.stringify(this.data))
-        } else {
-          await updateWorldview(this.data)
-        }
+        await updateWorldview(this.data, null, bookId)
       } finally {
         this.saving = false
       }
     },
 
-    async fetchPreview() {
+    async fetchPreview(bookId) {
       this.previewLoading = true
       try {
-        const res = await getInjectPreview()
+        const res = await getInjectPreview(bookId)
         this.previewText = res.data.text
         this.previewTokenEstimate = res.data.token_estimate
       } finally {
