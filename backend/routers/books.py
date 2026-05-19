@@ -1,6 +1,10 @@
 """REST endpoints for Book CRUD."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import io
+import uuid
+from pathlib import Path as FsPath
+
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -8,6 +12,12 @@ from backend.models.user import User
 from backend.routers.deps import get_current_user
 from backend.repositories import book_repo
 from backend.schemas.book import BookCreate, BookResponse, BookUpdate
+
+UPLOADS_DIR = FsPath(__file__).parent.parent.parent / "uploads" / "covers"
+ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
+MAX_SIZE_MB = 5
+TARGET_RATIO = 3 / 4
+RATIO_TOLERANCE = 0.05
 
 router = APIRouter(prefix="/api/v1/books", tags=["books"])
 
@@ -69,6 +79,79 @@ def delete_book(
     if not deleted:
         raise HTTPException(status_code=404, detail="Book not found")
     return None
+
+
+@router.post("/{book_id}/cover")
+async def upload_book_cover(
+    book_id: int,
+    file: UploadFile = File(...),
+    force: bool = Query(False),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from PIL import Image
+    book = book_repo.get_book_for_user(db, book_id, current_user.id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported type: .{ext}. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
+
+    contents = await file.read()
+    if len(contents) > MAX_SIZE_MB * 1024 * 1024:
+        raise HTTPException(status_code=400, detail=f"File too large. Max {MAX_SIZE_MB}MB.")
+
+    try:
+        img = Image.open(io.BytesIO(contents))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image file")
+
+    w, h = img.size
+    ratio = w / h
+    within_tolerance = abs(ratio - TARGET_RATIO) <= RATIO_TOLERANCE
+
+    warning = None
+    if not within_tolerance and not force:
+        warning = {
+            "aspect_ratio": f"{w}x{h} ({ratio:.2f})",
+            "expected_near": TARGET_RATIO,
+            "message": f"Aspect ratio is {ratio:.2f}, expected ~{TARGET_RATIO:.2f}. Set force=true to auto-crop.",
+        }
+
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    save_path = UPLOADS_DIR / filename
+
+    if not within_tolerance and force:
+        img = _crop_to_ratio(img, TARGET_RATIO)
+        img.save(save_path)
+    else:
+        img.save(save_path)
+
+    url_path = f"/uploads/covers/{filename}"
+    book.cover_image = url_path
+    db.commit()
+
+    result = {"cover_image": url_path}
+    if warning:
+        result["warning"] = warning
+    return result
+
+
+def _crop_to_ratio(img, target_ratio):
+    w, h = img.size
+    current_ratio = w / h
+    if abs(current_ratio - target_ratio) < 0.001:
+        return img
+    if current_ratio > target_ratio:
+        new_w = int(h * target_ratio)
+        left = (w - new_w) // 2
+        return img.crop((left, 0, left + new_w, h))
+    else:
+        new_h = int(w / target_ratio)
+        top = (h - new_h) // 2
+        return img.crop((0, top, w, top + new_h))
 
 
 @router.get("/{book_id}/stats")

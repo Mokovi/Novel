@@ -527,10 +527,16 @@ def build_arc_prompt_variables(db: Session, arc_id: int, book_id: int) -> dict:
     worldview_text = _read_book_worldview(db, book_id)
     writing_style_text = _read_book_writing_style(db, book_id)
 
+    book = book_repo.get_book(db, book_id)
+    book_name = book.name if book else ""
+    book_description = book.description if book else ""
+
     variables = {
         "arc_title": arc.title or "",
         "arc_description": arc.description or "",
         "chapter_summaries": chapter_summaries,
+        "book_name": book_name,
+        "book_description": book_description or "",
         "worldview": worldview_text,
         "writing_style": writing_style_text,
     }
@@ -582,19 +588,25 @@ def build_volume_prompt_variables(db: Session, volume_id: int, book_id: int) -> 
     arcs = chapter_repo.get_volume_arc_outlines(db, volume_id)
     arc_lines = []
     for a in arcs:
-        arc_lines.append(f"节: {a['arc_title']}\n描述: {a['arc_description']}\n节纲: {a['arc_outline']}")
+        arc_lines.append(f"事件: {a['arc_title']}\n描述: {a['arc_description']}\n事件纲: {a['arc_outline']}")
         for j, ch in enumerate(a.get("chapters", []), 1):
             summary = ch.get("ai_summary") or ch.get("summary") or ""
             arc_lines.append(f"  第{j}章 ({ch.get('title', '')}): {summary}")
-    arc_outlines = "\n\n".join(arc_lines) if arc_lines else "（暂无节纲）"
+    arc_outlines = "\n\n".join(arc_lines) if arc_lines else "（暂无事件纲）"
 
     worldview_text = _read_book_worldview(db, book_id)
     writing_style_text = _read_book_writing_style(db, book_id)
+
+    book = book_repo.get_book(db, book_id)
+    book_name = book.name if book else ""
+    book_description = book.description if book else ""
 
     variables = {
         "volume_title": volume.title or "",
         "volume_description": volume.description or "",
         "arc_outlines": arc_outlines,
+        "book_name": book_name,
+        "book_description": book_description or "",
         "worldview": worldview_text,
         "writing_style": writing_style_text,
     }
@@ -647,8 +659,14 @@ def build_book_prompt_variables(db: Session, book_id: int) -> dict:
     worldview_text = _read_book_worldview(db, book_id)
     writing_style_text = _read_book_writing_style(db, book_id)
 
+    book = book_repo.get_book(db, book_id)
+    book_name = book.name if book else ""
+    book_description = book.description if book else ""
+
     variables = {
         "volume_outlines": volume_outlines,
+        "book_name": book_name,
+        "book_description": book_description or "",
         "worldview": worldview_text,
         "writing_style": writing_style_text,
     }

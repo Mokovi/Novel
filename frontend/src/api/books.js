@@ -50,3 +50,11 @@ export function getBookOutline(id) {
 export function updateBookOutline(id, data) {
   return http.put(`/books/${id}/outline`, data)
 }
+
+export function uploadCover(bookId, file, force = false) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return http.post(`/books/${bookId}/cover?force=${force}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

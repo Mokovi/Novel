@@ -13,6 +13,8 @@ optional_variables:
   - writing_style
   - character_profiles
   - volume_outline
+  - book_name
+  - book_description
 ---
 
 You are a novelist designing the outline for a story arc within a long-form novel. Follow the instructions below precisely.
@@ -24,6 +26,14 @@ You are a novelist designing the outline for a story arc within a long-form nove
 ## Arc Description
 
 {{arc_description}}
+
+{{#book_name}}
+## Book
+- Title: {{book_name}}
+{{#book_description}}
+- Description: {{book_description}}
+{{/book_description}}
+{{/book_name}}
 
 {{#writing_style}}
 ## Writing Style

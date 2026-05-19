@@ -6,12 +6,21 @@ version: 1.0
 description: Generate a top-level outline for the entire book based on volumes and their outlines.
 required_variables:
   - volume_outlines
+  - book_name
 optional_variables:
   - worldview
   - writing_style
+  - book_description
 ---
 
 You are a novelist designing the outline for an entire book. Follow the instructions below precisely.
+
+## Book Information
+
+- Title: {{book_name}}
+{{#book_description}}
+- Description: {{book_description}}
+{{/book_description}}
 
 {{#writing_style}}
 ## Writing Style

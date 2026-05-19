@@ -1,5 +1,6 @@
 """Repository for Book database operations."""
 
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -52,6 +53,10 @@ def delete_book(db: Session, book_id: int, user_id: int) -> bool:
     book = get_book_for_user(db, book_id, user_id)
     if not book:
         return False
+    if book.cover_image:
+        cover_path = Path(__file__).parent.parent.parent / book.cover_image.lstrip("/")
+        if cover_path.exists():
+            cover_path.unlink()
     db.delete(book)
     db.commit()
     return True

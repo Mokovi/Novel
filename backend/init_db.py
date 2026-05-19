@@ -62,6 +62,7 @@ def main():
     print("Applying schema migrations...")
     _add_column("volumes", "outline", "TEXT")
     _add_column("chapters", "arc_id", "INTEGER REFERENCES arcs(id) ON DELETE SET NULL")
+    _add_column("books", "cover_image", "VARCHAR(500)")
 
     # Book-book_id columns
     _add_column("volumes", "book_id", "INTEGER REFERENCES books(id) ON DELETE CASCADE")

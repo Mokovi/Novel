@@ -14,7 +14,7 @@
           </button>
           <button class="tb-btn" @click="showCreateArc = true">
             <span class="tb-icon">⊕</span>
-            <span>新建节</span>
+            <span>新建事件</span>
           </button>
           <button class="tb-btn" @click="showCreateChapter = true">
             <span class="tb-icon">📄</span>
@@ -207,7 +207,7 @@
                     :class="{ active: showArcOutline[arc.id] }"
                     @click.stop="showArcOutline[arc.id] = !showArcOutline[arc.id]"
                   >
-                    节纲
+                    事件纲
                   </button>
                   <button
                     class="arc-btn arc-gen-btn"
@@ -236,7 +236,7 @@
                       v-else
                       v-model="arcOutlines[arc.id]"
                       class="outline-textarea"
-                      placeholder="节纲内容..."
+                      placeholder="事件纲内容..."
                       rows="3"
                     />
                     <div v-if="outlineMode[`arc_${arc.id}`] === 'edit'" class="outline-save-row">
@@ -244,7 +244,7 @@
                     </div>
                   </div>
                   <div v-else class="arc-outline-empty">
-                    <span>尚未生成节纲</span>
+                    <span>尚未生成事件纲</span>
                   </div>
                   <div class="outline-mode-toggle">
                     <button
@@ -303,7 +303,7 @@
                 </div>
               </div>
               <div v-else class="chapter-empty">
-                <span>该节下暂无章节</span>
+                <span>该事件下暂无章节</span>
               </div>
             </div>
           </div>
@@ -394,7 +394,7 @@
     </n-modal>
 
     <!-- Create Arc Modal -->
-    <n-modal v-model:show="showCreateArc" title="新建节" preset="card" style="width: 520px">
+    <n-modal v-model:show="showCreateArc" title="新建事件" preset="card" style="width: 520px">
       <n-form>
         <n-form-item label="所属卷">
           <n-select
@@ -403,11 +403,11 @@
             placeholder="选择卷"
           />
         </n-form-item>
-        <n-form-item label="节标题">
+        <n-form-item label="事件标题">
           <n-input v-model:value="newArc.title" placeholder="如：第一章 开端" />
         </n-form-item>
         <n-form-item label="描述">
-          <n-input v-model:value="newArc.description" type="textarea" rows="3" placeholder="本节描述" />
+          <n-input v-model:value="newArc.description" type="textarea" rows="3" placeholder="本事件描述" />
         </n-form-item>
       </n-form>
       <template #footer>
@@ -429,11 +429,11 @@
             @update:value="onVolumeChange"
           />
         </n-form-item>
-        <n-form-item label="所属节">
+        <n-form-item label="所属事件">
           <n-select
             v-model:value="newChapter.arc_id"
             :options="arcOptionsForCreate"
-            placeholder="选择节（可选）"
+            placeholder="选择事件（可选）"
             clearable
           />
         </n-form-item>
@@ -622,7 +622,7 @@ function confirmDeleteVolume(vol) {
 }
 
 function confirmDeleteArc(arc) {
-  deleteMessage.value = `确定删除节「${arc.title}」？其下的章节将变为未归属状态。`
+  deleteMessage.value = `确定删除事件「${arc.title}」？其下的章节将变为未归属状态。`
   pendingDelete = async () => {
     await handleDeleteArc(arc.id)
   }
@@ -679,7 +679,7 @@ function formatVolumeNum(idx) {
 
 function formatArcNum(idx) {
   const nums = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
-  return `第${nums[idx] || idx + 1}节`
+  return `第${nums[idx] || idx + 1}个事件`
 }
 
 function volumeProgress(volId) {
@@ -775,7 +775,7 @@ async function handleCreateArc() {
   newArc.value = { volume_id: null, title: '', description: '' }
   showCreateArc.value = false
   await store.fetchArcs(bookId.value)
-  message.success('节已创建')
+  message.success('事件已创建')
 }
 
 async function handleCreateChapter() {
@@ -804,7 +804,7 @@ async function handleDeleteArc(id) {
   await deleteArc(id)
   await store.fetchArcs(bookId.value)
   await store.fetchChapters(bookId.value)
-  message.success('节已删除')
+  message.success('事件已删除')
 }
 
 function handleGenerateChapter(ch) {
@@ -846,7 +846,7 @@ async function handleBatchDownload() {
 function prepareGenerateBook() {
   bookGenerating.value = true
   genPreviewTarget.value = { type: 'book' }
-  runOutlineSSE('全书大纲', (handlers) => generateBookOutline(bookId.value, handlers), (content) => {
+  runOutlineSSE('全书大纲', (handlers, overrides) => generateBookOutline(bookId.value, handlers, overrides), (content) => {
     bookOutline.value = content
   })
 }
@@ -854,7 +854,7 @@ function prepareGenerateBook() {
 function prepareGenerateVolume(vol) {
   volGenerating[vol.id] = true
   genPreviewTarget.value = { type: 'volume', id: vol.id }
-  runOutlineSSE(`卷纲: ${vol.title}`, (handlers) => generateVolumeOutline(vol.id, bookId.value, handlers), (content) => {
+  runOutlineSSE(`卷纲: ${vol.title}`, (handlers, overrides) => generateVolumeOutline(vol.id, bookId.value, handlers, overrides), (content) => {
     volOutlines[vol.id] = content
   })
 }
@@ -862,7 +862,7 @@ function prepareGenerateVolume(vol) {
 function prepareGenerateArc(arc) {
   arcGenerating[arc.id] = true
   genPreviewTarget.value = { type: 'arc', id: arc.id }
-  runOutlineSSE(`节纲: ${arc.title}`, (handlers) => generateArcOutline(arc.id, bookId.value, handlers), (content) => {
+  runOutlineSSE(`事件纲: ${arc.title}`, (handlers, overrides) => generateArcOutline(arc.id, bookId.value, handlers, overrides), (content) => {
     arcOutlines[arc.id] = content
   })
 }
@@ -926,7 +926,7 @@ async function handleSaveArcOutline(arc) {
   if (arcOutlines[arc.id] !== undefined) {
     await updateArc(arc.id, { outline: arcOutlines[arc.id] })
   }
-  message.success('节纲已保存')
+  message.success('事件纲已保存')
 }
 
 onMounted(async () => {

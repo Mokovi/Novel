@@ -1,7 +1,10 @@
 """AI_Novel — FastAPI application entry point."""
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.config import load_config
 from backend.routers import admin, api_plans, auth, books, chapters, characters, generate, model_apis, settings, task_bindings, templates, worldview
@@ -14,6 +17,9 @@ app = FastAPI(
     version=config.get("version", "0.1.0"),
 )
 
+UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,6 +27,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 app.include_router(api_plans.router)
 app.include_router(auth.router)

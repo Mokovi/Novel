@@ -16,6 +16,7 @@ class BookUpdate(BaseModel):
     outline: str | None = None
     worldview: str | None = None
     writing_style: str | None = None
+    cover_image: str | None = None
 
 
 class BookResponse(BaseModel):
@@ -25,5 +26,6 @@ class BookResponse(BaseModel):
     outline: str | None
     worldview: str | None
     writing_style: str | None
+    cover_image: str | None = None
     created_at: datetime
     updated_at: datetime

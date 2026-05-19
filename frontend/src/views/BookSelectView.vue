@@ -13,7 +13,8 @@
         @click="openBook(book.id)"
       >
         <div class="book-card-icon">
-          <span class="book-icon-text">{{ book.name.charAt(0) }}</span>
+          <img v-if="book.cover_image" :src="book.cover_image" class="book-cover-img" />
+          <span v-else class="book-icon-text">{{ book.name.charAt(0) }}</span>
         </div>
         <div class="book-card-info">
           <h3 class="book-card-title">{{ book.name }}</h3>
@@ -53,6 +54,7 @@
         <n-button type="primary" :loading="creating" @click="handleCreate">创建</n-button>
       </template>
     </n-modal>
+
   </div>
 </template>
 
@@ -138,6 +140,7 @@ onMounted(() => {
   gap: 16px;
 }
 .book-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -169,6 +172,13 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.book-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
 }
 .book-icon-text {
   color: white;
