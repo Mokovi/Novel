@@ -33,7 +33,7 @@
       </div>
 
       <n-card size="small" class="detail-card">
-        <CharacterForm :character="character" @saved="onSaved" @cancel="goBack" />
+        <CharacterForm :character="character" :book-id="bookId" @saved="onSaved" @cancel="goBack" />
       </n-card>
     </template>
   </div>

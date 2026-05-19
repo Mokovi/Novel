@@ -46,6 +46,7 @@ import { createCharacter, updateCharacter } from '../../api/characters.js'
 
 const props = defineProps({
   character: { type: Object, default: null },
+  bookId: { type: Number, required: true },
 })
 const emit = defineEmits(['saved', 'cancel'])
 
@@ -101,7 +102,7 @@ async function handleSubmit() {
       await updateCharacter(props.character.id, form.value)
       message.success('人物已更新')
     } else {
-      await createCharacter(form.value)
+      await createCharacter(form.value, props.bookId)
       message.success('人物已创建')
     }
     emit('saved')

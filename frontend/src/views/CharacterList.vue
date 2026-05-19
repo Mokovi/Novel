@@ -63,7 +63,7 @@
 
     <!-- Create modal -->
     <n-modal v-model:show="showCreate" preset="card" title="新建人物" style="width: 520px" segmented>
-      <CharacterForm @saved="onCreated" @cancel="showCreate = false" />
+      <CharacterForm :book-id="bookId" @saved="onCreated" @cancel="showCreate = false" />
     </n-modal>
   </div>
 </template>
