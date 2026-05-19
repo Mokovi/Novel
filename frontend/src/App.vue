@@ -101,6 +101,7 @@ import { lightThemeOverrides } from './styles/naive-theme.js'
 import AppIcon from './components/common/AppIcon.vue'
 import BookSelector from './components/common/BookSelector.vue'
 import { useAuthStore } from './stores/auth.js'
+import { useBooksStore } from './stores/books.js'
 import DashboardIcon from './assets/icons/DashboardIcon.vue'
 import OutlineIcon from './assets/icons/OutlineIcon.vue'
 import EditorIcon from './assets/icons/EditorIcon.vue'
@@ -112,6 +113,7 @@ import SettingsIcon from './assets/icons/SettingsIcon.vue'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const booksStore = useBooksStore()
 
 const themeOverrides = lightThemeOverrides
 
@@ -175,7 +177,7 @@ const menuOptions = [
 ]
 
 function getCurrentBookId() {
-  return Number(route.params.bookId) || null
+  return Number(route.params.bookId) || booksStore.currentBook?.id || null
 }
 
 function onMenuSelect(key) {

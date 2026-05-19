@@ -145,6 +145,25 @@ def main():
     finally:
         db.close()
 
+    # Migrate legacy worldview.json → first book if book has no worldview
+    worldview_path = Path(__file__).resolve().parent.parent / "data" / "worldview.json"
+    if worldview_path.exists():
+        db2 = Session(engine)
+        try:
+            first_book = db2.query(Book).order_by(Book.id).first()
+            if first_book and not first_book.worldview:
+                import json as _json
+                try:
+                    legacy = _json.loads(worldview_path.read_text(encoding="utf-8"))
+                    if legacy:
+                        first_book.worldview = _json.dumps(legacy, ensure_ascii=False)
+                        db2.commit()
+                        print(f"  + Migrated worldview.json to book id={first_book.id}")
+                except (_json.JSONDecodeError, Exception) as e:
+                    print(f"  ~ worldview.json migration skipped: {e}")
+        finally:
+            db2.close()
+
     print("Database initialization complete.")
 
 

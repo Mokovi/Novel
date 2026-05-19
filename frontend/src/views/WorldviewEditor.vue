@@ -20,53 +20,65 @@
     </div>
 
     <!-- Tabs -->
-    <n-tabs v-else type="line" animated class="section-tabs">
-      <n-tab-pane
-        v-for="sec in store.sections"
-        :key="sec.key"
-        :tab="sec.label"
-        :name="sec.key"
-      >
-        <div class="section-content">
-          <!-- Glossary (array of {term, definition}) -->
-          <template v-if="sec.key === '术语表'">
-            <GlossaryEditor
-              :items="glossaryItems"
-              @update:items="onGlossaryUpdate"
-            />
-          </template>
+    <template v-else-if="store.sections.length > 0">
+      <n-tabs type="line" animated class="section-tabs">
+        <n-tab-pane
+          v-for="sec in store.sections"
+          :key="sec.key"
+          :tab="sec.label"
+          :name="sec.key"
+        >
+          <div class="section-content">
+            <!-- Glossary (array of {term, definition}) -->
+            <template v-if="sec.key === '术语表'">
+              <GlossaryEditor
+                :items="glossaryItems"
+                @update:items="onGlossaryUpdate"
+              />
+            </template>
 
-          <!-- Array of objects -->
-          <template v-else-if="Array.isArray(sec.content)">
-            <ArrayEditor
-              :value="sec.content"
-              @update:value="onSectionUpdate(sec.key, $event)"
-            />
-          </template>
+            <!-- Array of objects -->
+            <template v-else-if="Array.isArray(sec.content)">
+              <ArrayEditor
+                :value="sec.content"
+                @update:value="onSectionUpdate(sec.key, $event)"
+              />
+            </template>
 
-          <!-- Object or other -->
-          <template v-else>
-            <ObjectEditor
-              :value="sec.content"
-              @update:value="onSectionUpdate(sec.key, $event)"
-            />
-          </template>
+            <!-- Object or other -->
+            <template v-else>
+              <ObjectEditor
+                :value="sec.content"
+                @update:value="onSectionUpdate(sec.key, $event)"
+              />
+            </template>
 
-          <!-- Save button per section -->
-          <div class="section-footer">
-            <n-button
-              type="primary"
-              size="small"
-              :loading="store.saving"
-              :disabled="!isSectionDirty(sec.key)"
-              @click="saveSection(sec.key)"
-            >
-              保存 {{ sec.label }}
-            </n-button>
+            <!-- Save button per section -->
+            <div class="section-footer">
+              <n-button
+                type="primary"
+                size="small"
+                :loading="store.saving"
+                :disabled="!isSectionDirty(sec.key)"
+                @click="saveSection(sec.key)"
+              >
+                保存 {{ sec.label }}
+              </n-button>
+            </div>
           </div>
-        </div>
-      </n-tab-pane>
-    </n-tabs>
+        </n-tab-pane>
+      </n-tabs>
+    </template>
+
+    <!-- Empty state -->
+    <div v-else class="empty-worldview">
+      <n-empty description="暂无世界观设定">
+        <template #extra>
+          <p class="empty-hint">世界观设定存储在作品级别，请先通过大纲视图中的「全书大纲」生成或手动添加内容。</p>
+          <n-button size="small" @click="refreshData">刷新数据</n-button>
+        </template>
+      </n-empty>
+    </div>
 
     <!-- Inject preview drawer -->
     <n-drawer v-model:show="showPreview" width="520" placement="right">
@@ -217,5 +229,20 @@ onMounted(() => {
   border-radius: 6px;
   padding: 16px;
   margin: 0;
+}
+
+.empty-worldview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+.empty-hint {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin: 8px 0 16px;
+  text-align: center;
+  max-width: 360px;
 }
 </style>

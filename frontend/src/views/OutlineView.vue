@@ -476,7 +476,7 @@
               <n-button type="primary" @click="startGen">开始生成</n-button>
             </template>
             <template v-else-if="genPhase === 'generating'">
-              <n-button @click="genAbort?.abort()">取消</n-button>
+              <n-button @click="cancelGeneration">取消</n-button>
             </template>
             <template v-else>
               <n-button type="primary" @click="showGenOutput = false">关闭</n-button>
@@ -678,6 +678,13 @@ function startGen() {
   genPhase.value = 'generating'
   genRunning.value = true
   pendingGenStart(userPrompt.value)
+}
+
+function cancelGeneration() {
+  genAbort.value?.abort()
+  genRunning.value = false
+  genPhase.value = 'idle'
+  message.info('已取消生成')
 }
 
 async function runOutlineSSE(label, urlFn, onContentDone) {
