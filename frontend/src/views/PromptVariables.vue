@@ -52,11 +52,25 @@
       </n-tab-pane>
 
       <!-- ═══ 世界观 ═══ -->
+      <!-- ═══ 世界观 ═══ -->
       <n-tab-pane name="worldview" tab="世界观">
         <div class="worldview-section">
           <div class="section-header">
             <h3>世界观设定</h3>
-            <n-button size="small" type="primary" :loading="worldviewSaving" @click="handleSaveWorldview">保存世界观</n-button>
+            <div class="header-actions">
+              <n-button size="small" quaternary @click="handleRefreshWorldview">
+                <template #icon>
+                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></n-icon>
+                </template>
+              </n-button>
+              <n-button size="small" @click="prepareGenerateWorldview">
+                <template #icon>
+                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" fill="none"/></svg></n-icon>
+                </template>
+                AI 生成设定
+              </n-button>
+              <n-button size="small" type="primary" :loading="worldviewSaving" @click="handleSaveWorldview">保存</n-button>
+            </div>
           </div>
           <div class="editor-mode-bar">
             <button class="mode-btn" :class="{ active: worldviewPreview }" @click="worldviewPreview = true">预览</button>
@@ -65,6 +79,39 @@
           <div v-if="worldviewPreview" class="markdown-preview" v-html="renderMarkdown(worldviewText)" />
           <textarea v-else v-model="worldviewText" class="markdown-textarea worldview-textarea" placeholder="在此输入世界观设定（支持 Markdown 格式）&#10;&#10;可以使用 ## 标题、- 列表、**加粗** 等格式" />
         </div>
+
+        <!-- ═══ SSE Generation Modal ═══ -->
+        <n-modal v-model:show="showGenModal" :mask-closable="false" style="width: 720px">
+          <n-card title="AI 生成世界观设定" style="max-height: 80vh; overflow-y: auto; border-radius: 12px">
+            <div v-if="genPhase === 'idle'">
+              <PromptInjectionPanel
+                title="AI 生成世界观设定"
+                :injection-items="injectionItems"
+                :book-id="bookId"
+                :loading="genRunning"
+                gen-type="worldview"
+                @start="startWorldviewGen"
+                @cancel="showGenModal = false"
+              />
+            </div>
+            <div v-if="genPhase !== 'idle'" class="gen-output">
+              <p v-if="genModel" class="gen-meta">模型: {{ genModel }} | 预估: {{ genTokens }} tokens</p>
+              <div v-if="genPhase === 'generating'" class="gen-text">{{ genOutput }}</div>
+              <div v-else class="markdown-body" v-html="renderMarkdown(genOutput)" />
+              <n-spin v-if="genRunning" size="small" />
+            </div>
+            <template #action>
+              <n-space justify="end">
+                <template v-if="genPhase === 'generating'">
+                  <n-button @click="cancelGeneration">取消</n-button>
+                </template>
+                <template v-else-if="genPhase === 'done'">
+                  <n-button type="primary" @click="closeGenModal">关闭</n-button>
+                </template>
+              </n-space>
+            </template>
+          </n-card>
+        </n-modal>
       </n-tab-pane>
 
       <!-- ═══ 人物 ═══ -->
@@ -154,10 +201,13 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
+import { NCard, NSpace } from 'naive-ui'
 import { marked } from 'marked'
 import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateBookWritingStyle, updateBookOutline, getBookWorldview } from '../api/books.js'
 import { listCharacters } from '../api/characters.js'
+import { generateWorldview, fetchWorldviewInjections } from '../api/generate.js'
 import CharacterForm from '../components/character/CharacterForm.vue'
+import PromptInjectionPanel from '../components/generate/PromptInjectionPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -194,6 +244,16 @@ const characters = ref([])
 const charLoading = ref(false)
 const charRoleFilter = ref('')
 const showCreateChar = ref(false)
+
+// ── Worldview generation state ──
+const showGenModal = ref(false)
+const genOutput = ref('')
+const genModel = ref('')
+const genTokens = ref(0)
+const genRunning = ref(false)
+const genAbort = ref(null)
+const genPhase = ref('idle') // 'idle' | 'generating' | 'done'
+const injectionItems = ref([])
 
 // ── Helpers ──
 function renderMarkdown(text) {
@@ -309,6 +369,71 @@ async function handleSaveWorldview() {
   } catch (e) {
     message.error('保存失败: ' + (e.response?.data?.detail || e.message))
   } finally { worldviewSaving.value = false }
+}
+
+// ── Worldview generation handlers ──
+async function prepareGenerateWorldview() {
+  genOutput.value = ''
+  genModel.value = ''
+  genTokens.value = 0
+  genRunning.value = false
+  genPhase.value = 'idle'
+  injectionItems.value = []
+  showGenModal.value = true
+  try {
+    const data = await fetchWorldviewInjections(bookId.value)
+    injectionItems.value = data.items || []
+  } catch (e) {
+    console.error('Failed to fetch injection items:', e)
+  }
+}
+
+function startWorldviewGen(overrides, userPrompt) {
+  genPhase.value = 'generating'
+  genRunning.value = true
+
+  const body = { user_prompt: userPrompt || '' }
+  if (overrides && (overrides.exclude_variables?.length || overrides.extra_variables || overrides.added_character_ids?.length)) {
+    body.injection_overrides = overrides
+  }
+
+  genAbort.value = generateWorldview(bookId.value, {
+    onStart: (evt) => {
+      genModel.value = evt.model || ''
+      genTokens.value = evt.token_estimate || 0
+    },
+    onToken: (token) => {
+      genOutput.value += token
+    },
+    onDone: () => {
+      genRunning.value = false
+      genPhase.value = 'done'
+      message.success('世界观设定生成完成')
+    },
+    onError: (err) => {
+      genRunning.value = false
+      genPhase.value = 'done'
+      message.error(err)
+    },
+  }, body)
+}
+
+function cancelGeneration() {
+  genAbort.value?.abort()
+  genRunning.value = false
+  genPhase.value = 'idle'
+  message.info('已取消生成')
+}
+
+function closeGenModal() {
+  showGenModal.value = false
+  loadWorldview()
+}
+
+async function handleRefreshWorldview() {
+  worldviewLoaded.value = false
+  await loadWorldview()
+  message.success('已刷新')
 }
 
 async function handleRefresh() {
