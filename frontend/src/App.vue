@@ -111,8 +111,7 @@ import AdminLoginModal from './components/common/AdminLoginModal.vue'
 import DashboardIcon from './assets/icons/DashboardIcon.vue'
 import OutlineIcon from './assets/icons/OutlineIcon.vue'
 import EditorIcon from './assets/icons/EditorIcon.vue'
-import WorldviewIcon from './assets/icons/WorldviewIcon.vue'
-import CharacterIcon from './assets/icons/CharacterIcon.vue'
+import VariablesIcon from './assets/icons/VariablesIcon.vue'
 import TemplateIcon from './assets/icons/TemplateIcon.vue'
 import SettingsIcon from './assets/icons/SettingsIcon.vue'
 
@@ -148,8 +147,7 @@ const activeMenu = computed(() => {
   if (name === 'dashboard') return 'dashboard'
   if (name === 'outline') return 'outline'
   if (name === 'editor') return 'editor'
-  if (name === 'worldview') return 'worldview'
-  if (name === 'characters' || name === 'character-detail') return 'characters'
+  if (name === 'variables' || name === 'character-detail') return 'variables'
   if (name === 'templates') return 'templates'
   if (name === 'settings') return 'settings'
   return 'dashboard'
@@ -174,14 +172,9 @@ const menuOptions = [
     icon: () => h(EditorIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
   },
   {
-    label: '世界观',
-    key: 'worldview',
-    icon: () => h(WorldviewIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
-  },
-  {
-    label: '人物',
-    key: 'characters',
-    icon: () => h(CharacterIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
+    label: '提示词变量',
+    key: 'variables',
+    icon: () => h(VariablesIcon, { style: { width: `${iconSize}px`, height: `${iconSize}px` } }),
   },
   {
     label: '模板库',
@@ -205,8 +198,7 @@ function onMenuSelect(key) {
     dashboard: bookId ? `/books/${bookId}/dashboard` : '/books',
     outline: bookId ? `/books/${bookId}/outline` : '/books',
     editor: bookId ? `/books/${bookId}/editor` : '/books',
-    worldview: bookId ? `/books/${bookId}/worldview` : '/books',
-    characters: bookId ? `/books/${bookId}/characters` : '/books',
+    variables: bookId ? `/books/${bookId}/variables` : '/books',
     templates: '/templates',
     settings: '/settings',
   }

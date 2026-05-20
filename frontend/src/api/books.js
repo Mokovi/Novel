@@ -51,6 +51,10 @@ export function updateBookOutline(id, data) {
   return http.put(`/books/${id}/outline`, data)
 }
 
+export function fetchPromptVariables(bookId) {
+  return http.get(`/books/${bookId}/prompt-variables`)
+}
+
 export function uploadCover(bookId, file, force = false) {
   const formData = new FormData()
   formData.append('file', file)

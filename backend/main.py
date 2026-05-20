@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import load_config
-from backend.routers import admin, api_plans, auth, books, chapters, characters, generate, model_apis, settings, task_bindings, templates, worldview
+from backend.routers import admin, api_plans, auth, books, chapters, characters, generate, model_apis, prompt_variables, settings, task_bindings, templates, worldview
 
 config = load_config()
 
@@ -42,6 +42,7 @@ app.include_router(templates.router)
 app.include_router(admin.router)
 app.include_router(settings.router)
 app.include_router(worldview.router)
+app.include_router(prompt_variables.router)
 
 
 @app.get("/api/v1/health")

@@ -61,6 +61,12 @@ const routes = [
     meta: { layout: 'app' },
     component: () => import('../views/CharacterDetail.vue'),
   },
+  {
+    path: '/books/:bookId/variables',
+    name: 'variables',
+    meta: { layout: 'app' },
+    component: () => import('../views/PromptVariables.vue'),
+  },
 
   // Global routes (full sidebar, no bookId in path)
   {
