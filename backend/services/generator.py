@@ -9,6 +9,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from backend.config import DATA_DIR, load_config
+from backend.schemas.generate import InjectionOverrides
 from backend.models.chapter import Volume
 from backend.repositories import book_repo, chapter_repo
 from backend.services import prompt_builder
@@ -433,6 +434,7 @@ async def generate_chapter_stream(
     max_tokens: Optional[int] = None,
     user_id: int = 1,
     user_prompt: Optional[str] = None,
+    injection_overrides: Optional[InjectionOverrides] = None,
 ) -> AsyncGenerator[str, None]:
     """Async generator yielding SSE events for chapter generation."""
     # Get book_id from volume
@@ -448,6 +450,15 @@ async def generate_chapter_stream(
     if ctx.get("error"):
         yield _sse_event("error", {"message": ctx["error"]})
         return
+
+    # Apply injection overrides
+    if injection_overrides:
+        ctx["variables"] = apply_injection_overrides(ctx["variables"], injection_overrides, db)
+        try:
+            ctx["prompt"] = prompt_builder.build_prompt(ctx["template"], ctx["variables"])
+        except ValueError as e:
+            yield _sse_event("error", {"message": str(e)})
+            return
 
     if user_prompt:
         ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + user_prompt
@@ -727,6 +738,48 @@ def _format_worldview_text_dict(data: dict) -> str:
         if text.strip():
             sections.append(text)
     return "\n\n".join(sections)
+
+
+def apply_injection_overrides(
+    variables: dict, overrides: "InjectionOverrides", db: Session
+) -> dict:
+    """Apply injection overrides to a variables dict.
+
+    - Removes excluded variables (sets to empty string)
+    - Fetches additional characters and appends to ``character_profiles``
+    - Merges extra_variables
+    """
+    if not overrides:
+        return variables
+
+    result = dict(variables)
+
+    # 1. Exclude variables
+    for var in overrides.exclude_variables:
+        result.pop(var, None)
+
+    # 2. Add extra characters
+    if overrides.added_character_ids and "character_profiles" in result:
+        from backend.repositories import character_repo
+
+        chars = []
+        for cid in overrides.added_character_ids:
+            c = character_repo.get_character(db, cid)
+            if c:
+                chars.append(c)
+        if chars:
+            added = _format_character_profiles(chars)
+            existing = result.get("character_profiles", "")
+            if existing:
+                result["character_profiles"] = existing + "\n\n" + added
+            else:
+                result["character_profiles"] = added
+
+    # 3. Merge extra variables
+    for key, value in overrides.extra_variables.items():
+        result[key] = value
+
+    return result
 
 
 def build_worldview_prompt_variables(db: Session, book_id: int) -> dict:

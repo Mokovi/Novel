@@ -455,23 +455,17 @@
     <!-- ═══ SSE Generation Output Modal ═══ -->
     <n-modal v-model:show="showGenOutput" :mask-closable="false" style="width: 720px">
       <n-card :title="genTitle" style="max-height: 80vh; overflow-y: auto; border-radius: 12px">
-        <div v-if="genPhase === 'idle'" class="gen-prompt-section">
-          <n-input
-            v-model:value="userPrompt"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 4 }"
-            placeholder="补充提示词（可选）：输入您对本次大纲生成的特定要求..."
+        <div v-if="genPhase === 'idle'">
+          <PromptInjectionPanel
+            :title="genTitle"
+            :injection-items="injectionItems"
+            :book-id="bookId"
+            :loading="genRunning"
+            :gen-type="genType"
+            :gen-id="genId"
+            @start="onGenPanelStart"
+            @cancel="showGenOutput = false"
           />
-          <div v-if="adminStore.isAdmin && genPreviewTarget" style="margin-top:12px">
-            <n-button size="small" type="warning" ghost @click="handleGenPreview">
-              <template #icon>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                </svg>
-              </template>
-              提示词预览
-            </n-button>
-          </div>
         </div>
         <div v-if="genPhase !== 'idle'" class="gen-output">
           <p v-if="genModel" class="gen-meta">模型: {{ genModel }} | 预估: {{ genTokens }} tokens</p>
@@ -481,40 +475,15 @@
         </div>
         <template #action>
           <n-space justify="end">
-            <template v-if="genPhase === 'idle'">
-              <n-button @click="showGenOutput = false">取消</n-button>
-              <n-button type="primary" @click="startGen">开始生成</n-button>
-            </template>
-            <template v-else-if="genPhase === 'generating'">
+            <template v-if="genPhase === 'generating'">
               <n-button @click="cancelGeneration">取消</n-button>
             </template>
-            <template v-else>
+            <template v-else-if="genPhase === 'done'">
               <n-button type="primary" @click="showGenOutput = false">关闭</n-button>
             </template>
           </n-space>
         </template>
       </n-card>
-    </n-modal>
-
-    <!-- ═══ Prompt Preview Modal ═══ -->
-    <n-modal v-model:show="showPreviewModal" preset="card" title="提示词预览" style="max-width: 800px">
-      <n-space v-if="previewLoading" justify="center">
-        <n-spin />
-      </n-space>
-      <n-space v-else-if="previewData" vertical :size="12">
-        <n-space>
-          <n-tag type="info" size="small">模型: {{ previewData.model }}</n-tag>
-          <n-tag size="small">模板: {{ previewData.template_name }}</n-tag>
-          <n-tag size="small">预估: ~{{ previewData.token_estimate }} tokens</n-tag>
-        </n-space>
-        <n-input
-          type="textarea"
-          :value="previewData.prompt"
-          readonly
-          rows="20"
-          class="preview-textarea"
-        />
-      </n-space>
     </n-modal>
 
     <!-- ═══ Confirm Delete Dialog ═══ -->
@@ -537,7 +506,6 @@ import { useMessage } from 'naive-ui'
 import { marked } from 'marked'
 import { useChaptersStore } from '../stores/chapters.js'
 import { useSettingsStore } from '../stores/settings.js'
-import { useAdminStore } from '../stores/admin.js'
 import {
   createVolume, createChapter, deleteChapter, deleteVolume,
   downloadChapter, downloadAllChapters,
@@ -546,16 +514,16 @@ import {
 } from '../api/chapters.js'
 import {
   generateArcOutline, generateVolumeOutline, generateBookOutline,
-  previewBookPrompt, previewVolumePrompt, previewArcPrompt,
+  fetchArcInjections, fetchVolumeInjections, fetchBookInjections,
   regenerateSummary,
 } from '../api/generate.js'
+import PromptInjectionPanel from '../components/generate/PromptInjectionPanel.vue'
 
 const router = useRouter()
 const route = useRoute()
 const message = useMessage()
 const store = useChaptersStore()
 const settingsStore = useSettingsStore()
-const adminStore = useAdminStore()
 
 const bookId = computed(() => Number(route.params.bookId))
 
@@ -593,16 +561,14 @@ const genTokens = ref(0)
 const genRunning = ref(false)
 const genAbort = ref(null)
 const genPhase = ref('idle') // 'idle' | 'generating' | 'done'
-const userPrompt = ref('')
-const genPreviewTarget = ref(null) // { type: 'book'|'volume'|'arc', id: number } | null
 
-// Preview modal state
-const showPreviewModal = ref(false)
-const previewData = ref(null)
-const previewLoading = ref(false)
+const injectionItems = ref([])
+const genType = ref('book') // 'book' | 'volume' | 'arc'
+const genId = ref(null)
 
 // Store the generation function to call when user clicks "开始生成"
 let pendingGenStart = null
+let pendingGenOverrides = null
 
 const bookGenerating = ref(false)
 const volGenerating = reactive({})
@@ -702,22 +668,28 @@ function onVolumeChange(volId) {
   newChapter.value.arc_id = null
 }
 
-function openGenModal(title) {
+function openGenModal(title, type, id) {
   genTitle.value = title
   genOutput.value = ''
   genModel.value = ''
   genTokens.value = 0
   genRunning.value = false
   genPhase.value = 'idle'
-  userPrompt.value = ''
+  genType.value = type
+  genId.value = id
+  injectionItems.value = []
   showGenOutput.value = true
 }
 
-function startGen() {
+function onGenPanelStart(overrides, userPrompt) {
   if (!pendingGenStart) return
   genPhase.value = 'generating'
   genRunning.value = true
-  pendingGenStart(userPrompt.value)
+  const body = { user_prompt: userPrompt || '' }
+  if (overrides && (overrides.exclude_variables?.length || overrides.extra_variables || overrides.added_character_ids?.length)) {
+    body.injection_overrides = overrides
+  }
+  pendingGenStart(body)
 }
 
 function cancelGeneration() {
@@ -727,9 +699,27 @@ function cancelGeneration() {
   message.info('已取消生成')
 }
 
-async function runOutlineSSE(label, urlFn, onContentDone) {
-  openGenModal(label)
-  pendingGenStart = (prompt) => {
+async function runOutlineSSE(label, type, id, urlFn, onContentDone) {
+  openGenModal(label, type, id)
+  // Fetch injection items
+  try {
+    let data
+    switch (type) {
+      case 'book':
+        data = await fetchBookInjections(bookId.value)
+        break
+      case 'volume':
+        data = await fetchVolumeInjections(id, bookId.value)
+        break
+      case 'arc':
+        data = await fetchArcInjections(id, bookId.value)
+        break
+    }
+    injectionItems.value = data.items || []
+  } catch (e) {
+    console.error('Failed to fetch injection items:', e)
+  }
+  pendingGenStart = (body) => {
     genAbort.value = urlFn({
       onStart: (evt) => {
         genModel.value = evt.model || ''
@@ -752,7 +742,7 @@ async function runOutlineSSE(label, urlFn, onContentDone) {
         genPhase.value = 'done'
         message.error(err)
       },
-    }, { user_prompt: prompt })
+    }, body)
   }
 }
 
@@ -845,58 +835,23 @@ async function handleBatchDownload() {
 
 function prepareGenerateBook() {
   bookGenerating.value = true
-  genPreviewTarget.value = { type: 'book' }
-  runOutlineSSE('全书大纲', (handlers, overrides) => generateBookOutline(bookId.value, handlers, overrides), (content) => {
+  runOutlineSSE('全书大纲', 'book', null, (handlers, overrides) => generateBookOutline(bookId.value, handlers, overrides), (content) => {
     bookOutline.value = content
   })
 }
 
 function prepareGenerateVolume(vol) {
   volGenerating[vol.id] = true
-  genPreviewTarget.value = { type: 'volume', id: vol.id }
-  runOutlineSSE(`卷纲: ${vol.title}`, (handlers, overrides) => generateVolumeOutline(vol.id, bookId.value, handlers, overrides), (content) => {
+  runOutlineSSE(`卷纲: ${vol.title}`, 'volume', vol.id, (handlers, overrides) => generateVolumeOutline(vol.id, bookId.value, handlers, overrides), (content) => {
     volOutlines[vol.id] = content
   })
 }
 
 function prepareGenerateArc(arc) {
   arcGenerating[arc.id] = true
-  genPreviewTarget.value = { type: 'arc', id: arc.id }
-  runOutlineSSE(`事件纲: ${arc.title}`, (handlers, overrides) => generateArcOutline(arc.id, bookId.value, handlers, overrides), (content) => {
+  runOutlineSSE(`事件纲: ${arc.title}`, 'arc', arc.id, (handlers, overrides) => generateArcOutline(arc.id, bookId.value, handlers, overrides), (content) => {
     arcOutlines[arc.id] = content
   })
-}
-
-function handleGenPreview() {
-  if (!genPreviewTarget.value) return
-  previewLoading.value = true
-  previewData.value = null
-  showPreviewModal.value = true
-  const target = genPreviewTarget.value
-
-  const promise = (() => {
-    switch (target.type) {
-      case 'book':
-        return previewBookPrompt(bookId.value)
-      case 'volume':
-        return previewVolumePrompt(target.id, bookId.value)
-      case 'arc':
-        return previewArcPrompt(target.id, bookId.value)
-      default:
-        return Promise.reject(new Error('未知预览类型'))
-    }
-  })()
-
-  promise
-    .then((data) => {
-      previewData.value = data
-    })
-    .catch((e) => {
-      message.error(e.message || '获取提示词预览失败')
-    })
-    .finally(() => {
-      previewLoading.value = false
-    })
 }
 
 // Reset loading states when modal closes
@@ -905,7 +860,6 @@ watch(showGenOutput, (val) => {
     bookGenerating.value = false
     for (const k of Object.keys(volGenerating)) volGenerating[k] = false
     for (const k of Object.keys(arcGenerating)) arcGenerating[k] = false
-    genPreviewTarget.value = null
   }
 })
 

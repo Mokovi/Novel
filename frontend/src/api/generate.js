@@ -118,13 +118,14 @@ export async function regenerateSummary(chapterId) {
 
 // ── Preview helpers (non-streaming) ────────────────────────
 
-async function previewFetch(url) {
+async function previewFetch(url, body) {
   const headers = { 'Content-Type': 'application/json' }
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
   const resp = await fetch(url, {
     method: 'POST',
     headers,
+    body: body ? JSON.stringify(body) : '{}',
   })
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ detail: 'Unknown error' }))
@@ -133,21 +134,25 @@ async function previewFetch(url) {
   return resp.json()
 }
 
-export async function previewPrompt(chapterId, bookId) {
-  const data = await previewFetch(`${BASE}/generate/chapter/${chapterId}/preview?book_id=${bookId}`)
+export async function previewPrompt(chapterId, bookId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  const data = await previewFetch(`${BASE}/generate/chapter/${chapterId}/preview?book_id=${bookId}`, body)
   return { data }
 }
 
-export async function previewArcPrompt(arcId, bookId) {
-  return previewFetch(`${BASE}/generate/arc/${arcId}/preview?book_id=${bookId}`)
+export async function previewArcPrompt(arcId, bookId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/generate/arc/${arcId}/preview?book_id=${bookId}`, body)
 }
 
-export async function previewVolumePrompt(volumeId, bookId) {
-  return previewFetch(`${BASE}/generate/volume/${volumeId}/preview?book_id=${bookId}`)
+export async function previewVolumePrompt(volumeId, bookId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/generate/volume/${volumeId}/preview?book_id=${bookId}`, body)
 }
 
-export async function previewBookPrompt(bookId) {
-  return previewFetch(`${BASE}/generate/book/preview?book_id=${bookId}`)
+export async function previewBookPrompt(bookId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/generate/book/preview?book_id=${bookId}`, body)
 }
 
 export function generateWorldview(bookId, handlers, overrides = {}) {
@@ -155,8 +160,47 @@ export function generateWorldview(bookId, handlers, overrides = {}) {
   return consumeSSE(url, handlers, overrides, getToken())
 }
 
-export async function previewWorldviewPrompt(bookId) {
-  return previewFetch(`${BASE}/generate/worldview/preview?book_id=${bookId}`)
+export async function previewWorldviewPrompt(bookId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/generate/worldview/preview?book_id=${bookId}`, body)
+}
+
+// ── Injection metadata helpers ────────────────────────────
+
+async function injectionFetch(url) {
+  const headers = { 'Content-Type': 'application/json' }
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: '{}',
+  })
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(err.detail || `HTTP ${resp.status}`)
+  }
+  return resp.json()
+}
+
+export async function fetchChapterInjections(chapterId, bookId) {
+  return injectionFetch(`${BASE}/generate/chapter/${chapterId}/injections?book_id=${bookId}`)
+}
+
+export async function fetchArcInjections(arcId, bookId) {
+  return injectionFetch(`${BASE}/generate/arc/${arcId}/injections?book_id=${bookId}`)
+}
+
+export async function fetchVolumeInjections(volumeId, bookId) {
+  return injectionFetch(`${BASE}/generate/volume/${volumeId}/injections?book_id=${bookId}`)
+}
+
+export async function fetchBookInjections(bookId) {
+  return injectionFetch(`${BASE}/generate/book/injections?book_id=${bookId}`)
+}
+
+export async function fetchWorldviewInjections(bookId) {
+  return injectionFetch(`${BASE}/generate/worldview/injections?book_id=${bookId}`)
 }
 
 // ── Book-scoped generate APIs ─────────────────────────────
@@ -165,16 +209,18 @@ export function generateBookOutlineScoped(bookId, handlers, overrides = {}) {
   return consumeSSE(`${BASE}/books/${bookId}/generate/book`, handlers, overrides)
 }
 
-export async function previewBookPromptScoped(bookId) {
-  return previewFetch(`${BASE}/books/${bookId}/generate/book/preview`)
+export async function previewBookPromptScoped(bookId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/books/${bookId}/generate/book/preview`, body)
 }
 
 export function generateBookChapter(bookId, chapterId, handlers, overrides = {}) {
   return consumeSSE(`${BASE}/books/${bookId}/generate/chapter/${chapterId}`, handlers, overrides)
 }
 
-export async function previewBookChapterPrompt(bookId, chapterId) {
-  return previewFetch(`${BASE}/books/${bookId}/generate/chapter/${chapterId}/preview`)
+export async function previewBookChapterPrompt(bookId, chapterId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/books/${bookId}/generate/chapter/${chapterId}/preview`, body)
 }
 
 export async function regenerateBookChapterSummary(bookId, chapterId) {
@@ -193,14 +239,16 @@ export function generateBookArcOutline(bookId, arcId, handlers, overrides = {}) 
   return consumeSSE(`${BASE}/books/${bookId}/generate/arc/${arcId}`, handlers, overrides)
 }
 
-export async function previewBookArcPrompt(bookId, arcId) {
-  return previewFetch(`${BASE}/books/${bookId}/generate/arc/${arcId}/preview`)
+export async function previewBookArcPrompt(bookId, arcId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/books/${bookId}/generate/arc/${arcId}/preview`, body)
 }
 
 export function generateBookVolumeOutline(bookId, volumeId, handlers, overrides = {}) {
   return consumeSSE(`${BASE}/books/${bookId}/generate/volume/${volumeId}`, handlers, overrides)
 }
 
-export async function previewBookVolumePrompt(bookId, volumeId) {
-  return previewFetch(`${BASE}/books/${bookId}/generate/volume/${volumeId}/preview`)
+export async function previewBookVolumePrompt(bookId, volumeId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/books/${bookId}/generate/volume/${volumeId}/preview`, body)
 }

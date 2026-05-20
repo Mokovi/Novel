@@ -82,6 +82,7 @@ def delete_relation(
 def list_characters(
     book_id: int = Query(..., description="Filter by book ID"),
     role_type: str | None = Query(None, description="Filter by role type"),
+    search: str | None = Query(None, description="Search by character name"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -89,7 +90,7 @@ def list_characters(
 ):
     """Get characters with optional role type filter and pagination."""
     book_repo.get_book_for_user(db, book_id, current_user.id)  # verify access
-    return character_repo.list_characters(db, book_id=book_id, role_type=role_type, skip=skip, limit=limit)
+    return character_repo.list_characters(db, book_id=book_id, role_type=role_type, search=search, skip=skip, limit=limit)
 
 
 @router.post("", response_model=CharacterResponse, status_code=201)

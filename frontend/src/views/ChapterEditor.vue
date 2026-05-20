@@ -128,22 +128,18 @@
 
         <!-- Center: Editor -->
         <main class="editor-zone">
-          <!-- Prompt panel (Phase: idle) -->
+          <!-- Prompt injection panel (Phase: idle) -->
           <div v-if="genPhase === 'idle'" class="gen-prompt-panel">
-            <div class="gen-prompt-card">
-              <h3 class="gen-prompt-title">{{ store.currentChapter?.content ? '重新生成章节' : 'AI 生成章节' }}</h3>
-              <p class="gen-prompt-desc">输入补充提示词（可选），或直接点击"开始生成"</p>
-              <textarea
-                v-model="userPrompt"
-                class="gen-prompt-textarea"
-                placeholder="补充提示词（可选）：输入您对本章节内容的特定要求..."
-                rows="4"
-              />
-              <div class="gen-prompt-actions">
-                <button class="gen-btn gen-btn-cancel" @click="cancelGeneration">取消</button>
-                <button class="gen-btn gen-btn-start" @click="startGeneration">开始生成</button>
-              </div>
-            </div>
+            <PromptInjectionPanel
+              :title="store.currentChapter?.content ? '重新生成章节' : 'AI 生成章节'"
+              :injection-items="injectionItems"
+              :book-id="bookId"
+              :loading="genPhase === 'generating'"
+              gen-type="chapter"
+              :gen-id="store.currentChapter?.id"
+              @start="startGeneration"
+              @cancel="cancelGeneration"
+            />
           </div>
 
           <!-- Generating overlay (Phase: generating) -->
@@ -304,15 +300,6 @@
                   </span>
                 </div>
 
-                <!-- Admin preview -->
-                <div v-if="adminStore.isAdmin" class="is-field" style="margin-top:12px">
-                  <button class="is-preview-btn" @click="handlePreviewPrompt">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                    </svg>
-                    提示词预览
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -335,26 +322,6 @@
       </div>
     </template>
 
-    <!-- Prompt preview modal -->
-    <n-modal v-model:show="showPreviewModal" preset="card" title="提示词预览" style="max-width: 800px">
-      <n-space v-if="previewLoading" justify="center">
-        <n-spin />
-      </n-space>
-      <n-space v-else-if="previewData" vertical :size="12">
-        <n-space>
-          <n-tag type="info" size="small">模型: {{ previewData.model }}</n-tag>
-          <n-tag size="small">模板: {{ previewData.template_name }}</n-tag>
-          <n-tag size="small">预估: ~{{ previewData.token_estimate }} tokens</n-tag>
-        </n-space>
-        <n-input
-          type="textarea"
-          :value="previewData.prompt"
-          readonly
-          rows="20"
-          class="preview-textarea"
-        />
-      </n-space>
-    </n-modal>
   </div>
 </template>
 
@@ -365,15 +332,14 @@ import { useMessage } from 'naive-ui'
 import { useChaptersStore } from '../stores/chapters.js'
 import { updateChapter, deleteChapter, downloadChapter, getChapterCharacters, setChapterCharacters } from '../api/chapters.js'
 import { listCharacters } from '../api/characters.js'
-import { generateChapter, previewPrompt, regenerateSummary } from '../api/generate.js'
-import { useAdminStore } from '../stores/admin.js'
+import { generateChapter, fetchChapterInjections, regenerateSummary } from '../api/generate.js'
 import StreamOutput from '../components/common/StreamOutput.vue'
+import PromptInjectionPanel from '../components/generate/PromptInjectionPanel.vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 
 const store = useChaptersStore()
-const adminStore = useAdminStore()
 const router = useRouter()
 const route = useRoute()
 const message = useMessage()
@@ -394,12 +360,10 @@ const editor = useEditor({
 // ── State ──
 const genPhase = ref(null) // null | 'idle' | 'generating' | 'done'
 const streamContent = ref('')
-const userPrompt = ref('')
 let abortController = null
 
-const showPreviewModal = ref(false)
-const previewData = ref(null)
-const previewLoading = ref(false)
+const injectionItems = ref([])
+const injectionItemsLoading = ref(false)
 
 const editTitle = ref('')
 const editSummary = ref('')
@@ -550,16 +514,30 @@ function confirmRegenerate() {
   openGenPanel()
 }
 
-function openGenPanel() {
+async function openGenPanel() {
   genPhase.value = 'idle'
-  userPrompt.value = ''
   streamContent.value = ''
+  injectionItemsLoading.value = true
+  try {
+    const data = await fetchChapterInjections(store.currentChapter.id, bookId.value)
+    injectionItems.value = data.items || []
+  } catch (e) {
+    console.error('Failed to fetch injection items:', e)
+    injectionItems.value = []
+  } finally {
+    injectionItemsLoading.value = false
+  }
 }
 
-function startGeneration() {
+function startGeneration(overrides, userPrompt) {
   if (!store.currentChapter) return
   genPhase.value = 'generating'
   streamContent.value = ''
+
+  const body = { user_prompt: userPrompt || '' }
+  if (overrides && (overrides.exclude_variables?.length || overrides.extra_variables || overrides.added_character_ids?.length)) {
+    body.injection_overrides = overrides
+  }
 
   abortController = generateChapter(
     store.currentChapter.id,
@@ -582,7 +560,7 @@ function startGeneration() {
         message.error(`生成失败: ${msg}`)
       },
     },
-    { user_prompt: userPrompt.value },
+    body,
   )
 }
 
@@ -590,13 +568,11 @@ function cancelGeneration() {
   abortController?.abort()
   genPhase.value = null
   streamContent.value = ''
-  userPrompt.value = ''
 }
 
 function closeGenPanel() {
   genPhase.value = null
   streamContent.value = ''
-  userPrompt.value = ''
 }
 
 async function handleSaveAiSummary() {
@@ -619,21 +595,6 @@ async function handleRegenerateSummary() {
     message.success('摘要已重新生成')
   } catch (e) {
     message.error(`摘要生成失败: ${e.message}`)
-  }
-}
-
-async function handlePreviewPrompt() {
-  if (!store.currentChapter) return
-  previewLoading.value = true
-  showPreviewModal.value = true
-  try {
-    const res = await previewPrompt(store.currentChapter.id, bookId.value)
-    previewData.value = res.data
-  } catch (e) {
-    message.error(`获取预览失败: ${e.message}`)
-    showPreviewModal.value = false
-  } finally {
-    previewLoading.value = false
   }
 }
 

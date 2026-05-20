@@ -8,9 +8,11 @@ from backend.database import get_db
 from backend.models.user import User
 from backend.routers.deps import get_current_user
 from backend.repositories import chapter_repo
-from backend.schemas.generate import GenerateRequest, OutlineGenerateRequest
+from backend.schemas.generate import GenerateRequest, InjectionOverrides, OutlineGenerateRequest
 from backend.repositories import book_repo
+from backend.services import prompt_builder
 from backend.services.generator import (
+    apply_injection_overrides,
     build_arc_prompt_variables,
     build_book_prompt_variables,
     build_prompt_variables,
@@ -22,6 +24,59 @@ from backend.services.generator import (
 )
 
 router = APIRouter(prefix="/api/v1/generate", tags=["generate"])
+
+_VARIABLE_LABELS: dict[str, str] = {
+    "book_name": "书名",
+    "book_description": "书籍描述",
+    "worldview": "世界观设定",
+    "writing_style": "文风设定",
+    "character_profiles": "角色档案",
+    "chapter_title": "章节标题",
+    "chapter_summary": "章节摘要",
+    "previous_chapter_summary": "前文摘要",
+    "chapter_outline": "章节大纲",
+    "volume_title": "卷标题",
+    "volume_description": "卷描述",
+    "volume_outline": "卷纲",
+    "arc_title": "事件标题",
+    "arc_description": "事件描述",
+    "event_outline": "事件纲",
+    "book_outline": "全书纲",
+    "chapter_summaries": "章节摘要列表",
+    "arc_outlines": "事件纲列表",
+    "volume_outlines": "卷纲列表",
+    "current_worldview": "当前世界观设定",
+}
+
+
+def _apply_overrides_and_rebuild(ctx: dict, overrides: InjectionOverrides, db: Session) -> dict:
+    """Apply injection overrides to a prompt context dict and rebuild the prompt."""
+    ctx["variables"] = apply_injection_overrides(ctx["variables"], overrides, db)
+    try:
+        ctx["prompt"] = prompt_builder.build_prompt(ctx["template"], ctx["variables"])
+    except ValueError as e:
+        ctx["error"] = str(e)
+    return ctx
+
+
+def _build_injection_items(ctx: dict) -> list[dict]:
+    """Build injection metadata items from a prompt context dict."""
+    template = ctx.get("template", {})
+    fm = template.get("frontmatter", {})
+    required = set(fm.get("required_variables") or [])
+    items = []
+    for var_name in ctx.get("variables", {}):
+        label = _VARIABLE_LABELS.get(var_name, var_name)
+        value = ctx["variables"][var_name]
+        items.append({
+            "variable": var_name,
+            "label": label,
+            "source": "system",
+            "default_enabled": True,
+            "required": var_name in required,
+            "available": bool(value and value.strip()),
+        })
+    return items
 
 
 # ── Chapter generation ─────────────────────────────────────
@@ -36,7 +91,10 @@ async def generate_chapter(
 ):
     """Stream chapter generation via SSE."""
     return StreamingResponse(
-        generate_chapter_stream(db, chapter_id, body.temperature, body.max_tokens, current_user.id, body.user_prompt),
+        generate_chapter_stream(
+            db, chapter_id, body.temperature, body.max_tokens,
+            current_user.id, body.user_prompt, body.injection_overrides,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -49,6 +107,7 @@ async def generate_chapter(
 async def preview_chapter_prompt(
     chapter_id: int,
     book_id: int = Query(..., description="Book ID for context"),
+    body: GenerateRequest = GenerateRequest(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -56,6 +115,10 @@ async def preview_chapter_prompt(
     ctx = build_prompt_variables(db, chapter_id, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
     return {
         "prompt": ctx["prompt"],
         "token_estimate": ctx["token_estimate"],
@@ -100,6 +163,10 @@ async def generate_arc_outline(
     ctx = build_arc_prompt_variables(db, arc_id, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
     if body.user_prompt:
         ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
 
@@ -129,6 +196,7 @@ async def generate_arc_outline(
 async def preview_arc_prompt(
     arc_id: int,
     book_id: int = Query(..., description="Book ID for context"),
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -136,6 +204,10 @@ async def preview_arc_prompt(
     ctx = build_arc_prompt_variables(db, arc_id, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
     return {
         "prompt": ctx["prompt"],
         "token_estimate": ctx["token_estimate"],
@@ -159,6 +231,10 @@ async def generate_volume_outline(
     ctx = build_volume_prompt_variables(db, volume_id, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
     if body.user_prompt:
         ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
 
@@ -188,6 +264,7 @@ async def generate_volume_outline(
 async def preview_volume_prompt(
     volume_id: int,
     book_id: int = Query(..., description="Book ID for context"),
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -195,6 +272,10 @@ async def preview_volume_prompt(
     ctx = build_volume_prompt_variables(db, volume_id, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=404, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
     return {
         "prompt": ctx["prompt"],
         "token_estimate": ctx["token_estimate"],
@@ -217,6 +298,10 @@ async def generate_book_outline(
     ctx = build_book_prompt_variables(db, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
     if body.user_prompt:
         ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
 
@@ -249,6 +334,7 @@ async def generate_book_outline(
 @router.post("/book/preview")
 async def preview_book_prompt(
     book_id: int = Query(..., description="Book ID"),
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -256,6 +342,10 @@ async def preview_book_prompt(
     ctx = build_book_prompt_variables(db, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
     return {
         "prompt": ctx["prompt"],
         "token_estimate": ctx["token_estimate"],
@@ -278,6 +368,10 @@ async def generate_worldview(
     ctx = build_worldview_prompt_variables(db, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
     if body.user_prompt:
         ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
 
@@ -309,6 +403,7 @@ async def generate_worldview(
 @router.post("/worldview/preview")
 async def preview_worldview_prompt(
     book_id: int = Query(..., description="Book ID"),
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -316,9 +411,104 @@ async def preview_worldview_prompt(
     ctx = build_worldview_prompt_variables(db, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
     return {
         "prompt": ctx["prompt"],
         "token_estimate": ctx["token_estimate"],
         "model": ctx["model_name"],
         "template_name": ctx["template_name"],
+    }
+
+
+# ── Injection metadata endpoints ────────────────────────────
+
+
+@router.post("/chapter/{chapter_id}/injections")
+async def chapter_injection_items(
+    chapter_id: int,
+    book_id: int = Query(..., description="Book ID for context"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return injection metadata for a chapter generation."""
+    ctx = build_prompt_variables(db, chapter_id, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=404, detail=ctx["error"])
+    return {
+        "items": _build_injection_items(ctx),
+        "template_name": ctx["template_name"],
+        "model": ctx["model_name"],
+    }
+
+
+@router.post("/arc/{arc_id}/injections")
+async def arc_injection_items(
+    arc_id: int,
+    book_id: int = Query(..., description="Book ID for context"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return injection metadata for an arc outline generation."""
+    ctx = build_arc_prompt_variables(db, arc_id, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=404, detail=ctx["error"])
+    return {
+        "items": _build_injection_items(ctx),
+        "template_name": ctx["template_name"],
+        "model": ctx["model_name"],
+    }
+
+
+@router.post("/volume/{volume_id}/injections")
+async def volume_injection_items(
+    volume_id: int,
+    book_id: int = Query(..., description="Book ID for context"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return injection metadata for a volume outline generation."""
+    ctx = build_volume_prompt_variables(db, volume_id, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=404, detail=ctx["error"])
+    return {
+        "items": _build_injection_items(ctx),
+        "template_name": ctx["template_name"],
+        "model": ctx["model_name"],
+    }
+
+
+@router.post("/book/injections")
+async def book_injection_items(
+    book_id: int = Query(..., description="Book ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return injection metadata for a book outline generation."""
+    ctx = build_book_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    return {
+        "items": _build_injection_items(ctx),
+        "template_name": ctx["template_name"],
+        "model": ctx["model_name"],
+    }
+
+
+@router.post("/worldview/injections")
+async def worldview_injection_items(
+    book_id: int = Query(..., description="Book ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return injection metadata for a worldview generation."""
+    ctx = build_worldview_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    return {
+        "items": _build_injection_items(ctx),
+        "template_name": ctx["template_name"],
+        "model": ctx["model_name"],
     }

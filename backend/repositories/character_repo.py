@@ -17,6 +17,7 @@ def list_characters(
     db: Session,
     book_id: int | None = None,
     role_type: Optional[str] = None,
+    search: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[Character]:
@@ -25,6 +26,8 @@ def list_characters(
         query = query.filter(Character.book_id == book_id)
     if role_type:
         query = query.filter(Character.role_type == role_type)
+    if search:
+        query = query.filter(Character.name.ilike(f"%{search}%"))
     return query.order_by(Character.id).offset(skip).limit(limit).all()
 
 

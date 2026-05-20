@@ -63,23 +63,16 @@
     <!-- ═══ SSE Generation Output Modal ═══ -->
     <n-modal v-model:show="showGenModal" :mask-closable="false" style="width: 720px">
       <n-card title="AI 生成世界观设定" style="max-height: 80vh; overflow-y: auto; border-radius: 12px">
-        <div v-if="genPhase === 'idle'" class="gen-prompt-section">
-          <n-input
-            v-model:value="userPrompt"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 4 }"
-            placeholder="补充提示词（可选）：输入您对世界观生成的特定要求..."
+        <div v-if="genPhase === 'idle'">
+          <PromptInjectionPanel
+            title="AI 生成世界观设定"
+            :injection-items="injectionItems"
+            :book-id="bookId"
+            :loading="genRunning"
+            gen-type="worldview"
+            @start="startWorldviewGen"
+            @cancel="showGenModal = false"
           />
-          <div v-if="adminStore.isAdmin" style="margin-top:12px">
-            <n-button size="small" type="warning" ghost @click="handlePreview">
-              <template #icon>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                </svg>
-              </template>
-              提示词预览
-            </n-button>
-          </div>
         </div>
         <div v-if="genPhase !== 'idle'" class="gen-output">
           <p v-if="genModel" class="gen-meta">模型: {{ genModel }} | 预估: {{ genTokens }} tokens</p>
@@ -89,40 +82,15 @@
         </div>
         <template #action>
           <n-space justify="end">
-            <template v-if="genPhase === 'idle'">
-              <n-button @click="showGenModal = false">取消</n-button>
-              <n-button type="primary" @click="startWorldviewGen">开始生成</n-button>
-            </template>
-            <template v-else-if="genPhase === 'generating'">
+            <template v-if="genPhase === 'generating'">
               <n-button @click="cancelGeneration">取消</n-button>
             </template>
-            <template v-else>
+            <template v-else-if="genPhase === 'done'">
               <n-button type="primary" @click="closeGenModal">关闭</n-button>
             </template>
           </n-space>
         </template>
       </n-card>
-    </n-modal>
-
-    <!-- ═══ Prompt Preview Modal ═══ -->
-    <n-modal v-model:show="showPreviewModal" preset="card" title="提示词预览" style="max-width: 800px">
-      <n-space v-if="previewLoading" justify="center">
-        <n-spin />
-      </n-space>
-      <n-space v-else-if="previewData" vertical :size="12">
-        <n-space>
-          <n-tag type="info" size="small">模型: {{ previewData.model }}</n-tag>
-          <n-tag size="small">模板: {{ previewData.template_name }}</n-tag>
-          <n-tag size="small">预估: ~{{ previewData.token_estimate }} tokens</n-tag>
-        </n-space>
-        <n-input
-          type="textarea"
-          :value="previewData.prompt"
-          readonly
-          rows="20"
-          class="preview-textarea"
-        />
-      </n-space>
     </n-modal>
   </div>
 </template>
@@ -133,12 +101,11 @@ import { useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { marked } from 'marked'
 import { useWorldviewStore } from '../stores/worldview.js'
-import { useAdminStore } from '../stores/admin.js'
-import { generateWorldview, previewWorldviewPrompt } from '../api/generate.js'
+import { generateWorldview, fetchWorldviewInjections } from '../api/generate.js'
+import PromptInjectionPanel from '../components/generate/PromptInjectionPanel.vue'
 
 const route = useRoute()
 const store = useWorldviewStore()
-const adminStore = useAdminStore()
 const message = useMessage()
 
 const bookId = computed(() => Number(route.params.bookId))
@@ -159,12 +126,8 @@ const genTokens = ref(0)
 const genRunning = ref(false)
 const genAbort = ref(null)
 const genPhase = ref('idle') // 'idle' | 'generating' | 'done'
-const userPrompt = ref('')
 
-// ── Preview modal state ──
-const showPreviewModal = ref(false)
-const previewData = ref(null)
-const previewLoading = ref(false)
+const injectionItems = ref([])
 
 function renderMarkdown(text) {
   if (!text) return ''
@@ -197,19 +160,30 @@ onMounted(() => {
 
 // ── Generation handlers ──
 
-function prepareGenerateWorldview() {
+async function prepareGenerateWorldview() {
   genOutput.value = ''
   genModel.value = ''
   genTokens.value = 0
   genRunning.value = false
   genPhase.value = 'idle'
-  userPrompt.value = ''
+  injectionItems.value = []
   showGenModal.value = true
+  try {
+    const data = await fetchWorldviewInjections(bookId.value)
+    injectionItems.value = data.items || []
+  } catch (e) {
+    console.error('Failed to fetch injection items:', e)
+  }
 }
 
-function startWorldviewGen() {
+function startWorldviewGen(overrides, userPrompt) {
   genPhase.value = 'generating'
   genRunning.value = true
+
+  const body = { user_prompt: userPrompt || '' }
+  if (overrides && (overrides.exclude_variables?.length || overrides.extra_variables || overrides.added_character_ids?.length)) {
+    body.injection_overrides = overrides
+  }
 
   genAbort.value = generateWorldview(bookId.value, {
     onStart: (evt) => {
@@ -229,7 +203,7 @@ function startWorldviewGen() {
       genPhase.value = 'done'
       message.error(err)
     },
-  }, { user_prompt: userPrompt.value })
+  }, body)
 }
 
 function cancelGeneration() {
@@ -242,20 +216,6 @@ function cancelGeneration() {
 function closeGenModal() {
   showGenModal.value = false
   store.fetch(bookId.value)
-}
-
-async function handlePreview() {
-  previewLoading.value = true
-  previewData.value = null
-  showPreviewModal.value = true
-  try {
-    const data = await previewWorldviewPrompt(bookId.value)
-    previewData.value = data
-  } catch (e) {
-    message.error(e.message || '获取提示词预览失败')
-  } finally {
-    previewLoading.value = false
-  }
 }
 </script>
 
