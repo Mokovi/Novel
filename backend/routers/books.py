@@ -263,3 +263,35 @@ def update_book_outline(
     book.outline = body.get("outline", "")
     db.commit()
     return {"outline": book.outline}
+
+
+# ── Per-book map ───────────────────────────────────────────
+
+
+@router.get("/{book_id}/map")
+def get_book_map(
+    book_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get a book's map markdown."""
+    book = book_repo.get_book_for_user(db, book_id, current_user.id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return {"map": book.map or ""}
+
+
+@router.put("/{book_id}/map")
+def update_book_map(
+    book_id: int,
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a book's map (stored as markdown text)."""
+    book = book_repo.get_book_for_user(db, book_id, current_user.id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    book.map = body.get("map", "")
+    db.commit()
+    return {"map": book.map}

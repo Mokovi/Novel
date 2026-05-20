@@ -113,6 +113,68 @@
         </n-modal>
       </n-tab-pane>
 
+      <!-- ═══ 地图 ═══ -->
+      <n-tab-pane name="map" tab="地图">
+        <div class="worldview-section">
+          <div class="section-header">
+            <h3>地图设定 <span class="var-name-tag" style="margin-left:8px">map_data</span></h3>
+            <div class="header-actions">
+              <n-button size="small" quaternary @click="handleRefreshMap">
+                <template #icon>
+                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></n-icon>
+                </template>
+              </n-button>
+              <n-button size="small" @click="prepareGenerateMap">
+                <template #icon>
+                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" fill="none"/></svg></n-icon>
+                </template>
+                AI 生成设定
+              </n-button>
+              <n-button size="small" type="primary" :loading="mapSaving" @click="handleSaveMap">保存</n-button>
+            </div>
+          </div>
+          <div class="editor-mode-bar">
+            <button class="mode-btn" :class="{ active: mapPreview }" @click="mapPreview = true">预览</button>
+            <button class="mode-btn" :class="{ active: !mapPreview }" @click="mapPreview = false">编辑</button>
+          </div>
+          <div v-if="mapPreview" class="markdown-preview" v-html="renderMarkdown(mapText)" />
+          <textarea v-else v-model="mapText" class="markdown-textarea worldview-textarea" placeholder="在此输入地图设定（支持 Markdown 格式）&#10;&#10;可以使用 ## 标题、- 列表、**加粗** 等格式" />
+        </div>
+
+        <!-- ═══ SSE Generation Modal ═══ -->
+        <n-modal v-model:show="showMapGenModal" :mask-closable="false" style="width: 720px">
+          <n-card title="AI 生成地图设定" style="max-height: 80vh; overflow-y: auto; border-radius: 12px">
+            <div v-if="mapGenPhase === 'idle'">
+              <PromptInjectionPanel
+                title="AI 生成地图设定"
+                :injection-items="mapInjectionItems"
+                :book-id="bookId"
+                :loading="mapGenRunning"
+                gen-type="map"
+                @start="startMapGen"
+                @cancel="showMapGenModal = false"
+              />
+            </div>
+            <div v-if="mapGenPhase !== 'idle'" class="gen-output">
+              <p v-if="mapGenModel" class="gen-meta">模型: {{ mapGenModel }} | 预估: {{ mapGenTokens }} tokens</p>
+              <div v-if="mapGenPhase === 'generating'" class="gen-text">{{ mapGenOutput }}</div>
+              <div v-else class="markdown-body" v-html="renderMarkdown(mapGenOutput)" />
+              <n-spin v-if="mapGenRunning" size="small" />
+            </div>
+            <template #action>
+              <n-space justify="end">
+                <template v-if="mapGenPhase === 'generating'">
+                  <n-button @click="cancelMapGeneration">取消</n-button>
+                </template>
+                <template v-else-if="mapGenPhase === 'done'">
+                  <n-button type="primary" @click="closeMapGenModal">关闭</n-button>
+                </template>
+              </n-space>
+            </template>
+          </n-card>
+        </n-modal>
+      </n-tab-pane>
+
       <!-- ═══ 人物 ═══ -->
       <n-tab-pane name="characters" tab="人物">
         <div class="character-section">
@@ -202,9 +264,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { NCard, NSpace } from 'naive-ui'
 import { marked } from 'marked'
-import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateBookOutline, getBookWorldview } from '../api/books.js'
+import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateBookOutline, getBookWorldview, getBookMap, updateBookMap } from '../api/books.js'
 import { listCharacters } from '../api/characters.js'
-import { generateWorldview, fetchWorldviewInjections } from '../api/generate.js'
+import { generateWorldview, fetchWorldviewInjections, generateMap, fetchMapInjections } from '../api/generate.js'
 import CharacterForm from '../components/character/CharacterForm.vue'
 import PromptInjectionPanel from '../components/generate/PromptInjectionPanel.vue'
 
@@ -243,6 +305,22 @@ const characters = ref([])
 const charLoading = ref(false)
 const charRoleFilter = ref('')
 const showCreateChar = ref(false)
+
+// ── Map tab state ──
+const mapText = ref('')
+const mapPreview = ref(true)
+const mapSaving = ref(false)
+const mapLoaded = ref(false)
+
+// ── Map generation state ──
+const showMapGenModal = ref(false)
+const mapGenOutput = ref('')
+const mapGenModel = ref('')
+const mapGenTokens = ref(0)
+const mapGenRunning = ref(false)
+const mapGenAbort = ref(null)
+const mapGenPhase = ref('idle') // 'idle' | 'generating' | 'done'
+const mapInjectionItems = ref([])
 
 // ── Worldview generation state ──
 const showGenModal = ref(false)
@@ -311,6 +389,17 @@ async function loadWorldview() {
   }
 }
 
+async function loadMap() {
+  if (mapLoaded.value) return
+  try {
+    const res = await getBookMap(bookId.value)
+    mapText.value = res.data.map || ''
+    mapLoaded.value = true
+  } catch (e) {
+    message.error('加载地图失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
 async function fetchCharacters() {
   charLoading.value = true
   try {
@@ -335,6 +424,7 @@ function onCharCreated() {
 // ── Tab switch handlers ──
 watch(activeTab, (tab) => {
   if (tab === 'worldview' && !worldviewLoaded.value) loadWorldview()
+  if (tab === 'map' && !mapLoaded.value) loadMap()
   if (tab === 'characters' && characters.value.length === 0) fetchCharacters()
 })
 
@@ -350,6 +440,8 @@ async function handleSave(v) {
     else if (name === 'worldview') await updateBookWorldview(bid, { worldview: editValues[name] })
     else if (name === 'writing_style') {
       await updateBook(bid, { writing_style: editValues[name] })
+    } else if (name === 'map_data') {
+      await updateBookMap(bid, { map: editValues[name] })
     }
     message.success(`${v.label} 已保存`)
   } catch (e) {
@@ -366,6 +458,16 @@ async function handleSaveWorldview() {
   } catch (e) {
     message.error('保存失败: ' + (e.response?.data?.detail || e.message))
   } finally { worldviewSaving.value = false }
+}
+
+async function handleSaveMap() {
+  mapSaving.value = true
+  try {
+    await updateBookMap(bookId.value, { map: mapText.value })
+    message.success('地图设定已保存')
+  } catch (e) {
+    message.error('保存失败: ' + (e.response?.data?.detail || e.message))
+  } finally { mapSaving.value = false }
 }
 
 // ── Worldview generation handlers ──
@@ -433,10 +535,77 @@ async function handleRefreshWorldview() {
   message.success('已刷新')
 }
 
+// ── Map generation handlers ──
+async function prepareGenerateMap() {
+  mapGenOutput.value = ''
+  mapGenModel.value = ''
+  mapGenTokens.value = 0
+  mapGenRunning.value = false
+  mapGenPhase.value = 'idle'
+  mapInjectionItems.value = []
+  showMapGenModal.value = true
+  try {
+    const data = await fetchMapInjections(bookId.value)
+    mapInjectionItems.value = data.items || []
+  } catch (e) {
+    console.error('Failed to fetch map injection items:', e)
+  }
+}
+
+function startMapGen(overrides, userPrompt) {
+  mapGenPhase.value = 'generating'
+  mapGenRunning.value = true
+
+  const body = { user_prompt: userPrompt || '' }
+  if (overrides && (overrides.exclude_variables?.length || overrides.extra_variables || overrides.added_character_ids?.length)) {
+    body.injection_overrides = overrides
+  }
+
+  mapGenAbort.value = generateMap(bookId.value, {
+    onStart: (evt) => {
+      mapGenModel.value = evt.model || ''
+      mapGenTokens.value = evt.token_estimate || 0
+    },
+    onToken: (token) => {
+      mapGenOutput.value += token
+    },
+    onDone: () => {
+      mapGenRunning.value = false
+      mapGenPhase.value = 'done'
+      message.success('地图设定生成完成')
+    },
+    onError: (err) => {
+      mapGenRunning.value = false
+      mapGenPhase.value = 'done'
+      message.error(err)
+    },
+  }, body)
+}
+
+function cancelMapGeneration() {
+  mapGenAbort.value?.abort()
+  mapGenRunning.value = false
+  mapGenPhase.value = 'idle'
+  message.info('已取消生成')
+}
+
+function closeMapGenModal() {
+  showMapGenModal.value = false
+  loadMap()
+}
+
+async function handleRefreshMap() {
+  mapLoaded.value = false
+  await loadMap()
+  message.success('已刷新')
+}
+
 async function handleRefresh() {
   await loadVariables()
   worldviewLoaded.value = false
+  mapLoaded.value = false
   if (activeTab.value === 'worldview') await loadWorldview()
+  if (activeTab.value === 'map') await loadMap()
   if (activeTab.value === 'characters') await fetchCharacters()
   message.success('已刷新')
 }
@@ -444,6 +613,7 @@ async function handleRefresh() {
 onMounted(() => {
   loadVariables()
   if (route.query.tab === 'worldview') loadWorldview()
+  if (route.query.tab === 'map') loadMap()
   if (route.query.tab === 'characters') fetchCharacters()
 })
 </script>

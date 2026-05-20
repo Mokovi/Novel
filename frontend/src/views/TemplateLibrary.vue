@@ -105,6 +105,7 @@
                     <n-button size="tiny" @click="insertVariable('writing_style')" :secondary="true">写作风格</n-button>
                     <n-button size="tiny" @click="insertVariable('worldview')" :secondary="true">世界观</n-button>
                     <n-button size="tiny" @click="insertVariable('character_profiles')" :secondary="true">人物设定</n-button>
+                    <n-button size="tiny" @click="insertVariable('map_data')" :secondary="true">地图设定</n-button>
                   </n-space>
                 </div>
                 <div class="textarea-wrapper" ref="editorWrapperRef">
@@ -336,6 +337,7 @@ const allVariables = computed(() => {
     'volume_outlines',
     'chapter_summaries',
     'current_worldview',
+    'map_data',
     ...editRequiredVars.value,
     ...editOptionalVars.value,
   ])
@@ -574,7 +576,7 @@ function openPreview() {
     ...editRequiredVars.value,
     ...editOptionalVars.value,
     'chapter_title', 'chapter_summary', 'writing_style', 'worldview',
-    'character_profiles', 'chapter_outline', 'previous_chapter_summary',
+    'character_profiles', 'chapter_outline', 'previous_chapter_summary', 'map_data',
   ])
   previewVariables.value = [...varNames].map(name => ({
     name,

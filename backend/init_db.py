@@ -63,6 +63,8 @@ def main():
     _add_column("volumes", "outline", "TEXT")
     _add_column("chapters", "arc_id", "INTEGER REFERENCES arcs(id) ON DELETE SET NULL")
     _add_column("books", "cover_image", "VARCHAR(500)")
+    _add_column("books", "map", "TEXT")
+    _add_column("books", "map_format", "VARCHAR(20)")
 
     # Book-book_id columns
     _add_column("volumes", "book_id", "INTEGER REFERENCES books(id) ON DELETE CASCADE")

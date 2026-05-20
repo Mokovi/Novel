@@ -55,6 +55,14 @@ export function fetchPromptVariables(bookId) {
   return http.get(`/books/${bookId}/prompt-variables`)
 }
 
+export function getBookMap(id) {
+  return http.get(`/books/${id}/map`)
+}
+
+export function updateBookMap(id, data) {
+  return http.put(`/books/${id}/map`, data)
+}
+
 export function uploadCover(bookId, file, force = false) {
   const formData = new FormData()
   formData.append('file', file)

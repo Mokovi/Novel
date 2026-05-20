@@ -203,6 +203,22 @@ export async function fetchWorldviewInjections(bookId) {
   return injectionFetch(`${BASE}/generate/worldview/injections?book_id=${bookId}`)
 }
 
+// ── Map generation ──────────────────────────────────────────
+
+export function generateMap(bookId, handlers, overrides = {}) {
+  const url = `${BASE}/generate/map?book_id=${bookId}`
+  return consumeSSE(url, handlers, overrides, getToken())
+}
+
+export async function previewMapPrompt(bookId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/generate/map/preview?book_id=${bookId}`, body)
+}
+
+export async function fetchMapInjections(bookId) {
+  return injectionFetch(`${BASE}/generate/map/injections?book_id=${bookId}`)
+}
+
 // ── Book-scoped generate APIs ─────────────────────────────
 
 export function generateBookOutlineScoped(bookId, handlers, overrides = {}) {

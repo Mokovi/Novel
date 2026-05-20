@@ -116,6 +116,14 @@ def _read_book_outline(db: Session, book_id: int) -> str:
     return load_config().get("book_outline", "")
 
 
+def _read_book_map(db: Session, book_id: int) -> str:
+    """Load map from Book DB record."""
+    book = book_repo.get_book(db, book_id)
+    if book and book.map:
+        return book.map
+    return ""
+
+
 # ── Streaming helpers ──────────────────────────────────────
 
 
@@ -368,6 +376,7 @@ def build_prompt_variables(db: Session, chapter_id: int, book_id: int) -> dict:
         "worldview": worldview_text,
         "writing_style": writing_style_text,
         "character_profiles": character_profiles,
+        "map_data": _read_book_map(db, book_id),
     }
 
     # Inject previous chapter AI summaries
@@ -550,6 +559,7 @@ def build_arc_prompt_variables(db: Session, arc_id: int, book_id: int) -> dict:
         "book_description": book_description or "",
         "worldview": worldview_text,
         "writing_style": writing_style_text,
+        "map_data": _read_book_map(db, book_id),
     }
 
     # Inject parent volume outline (if configured)
@@ -620,6 +630,7 @@ def build_volume_prompt_variables(db: Session, volume_id: int, book_id: int) -> 
         "book_description": book_description or "",
         "worldview": worldview_text,
         "writing_style": writing_style_text,
+        "map_data": _read_book_map(db, book_id),
     }
 
     # Inject book outline (if configured)
@@ -680,6 +691,7 @@ def build_book_prompt_variables(db: Session, book_id: int) -> dict:
         "book_description": book_description or "",
         "worldview": worldview_text,
         "writing_style": writing_style_text,
+        "map_data": _read_book_map(db, book_id),
     }
 
     try:
@@ -810,6 +822,51 @@ def build_worldview_prompt_variables(db: Session, book_id: int) -> dict:
     variables = {
         "current_worldview": current_worldview,
         "writing_style": writing_style_text,
+        "map_data": _read_book_map(db, book_id),
+    }
+
+    try:
+        prompt = prompt_builder.build_prompt(template, variables)
+    except ValueError as e:
+        return {"error": str(e)}
+
+    token_estimate = prompt_builder.estimate_tokens(prompt)
+    route_config = resolve_api_for_task(db, "worldbuilding")
+    if not route_config or not route_config.get("api_key"):
+        return {"error": "No API configured for worldbuilding task"}
+    model_name = route_config.get("model_name", "")
+    template_name = template.get("frontmatter", {}).get("name", template.get("file_name", ""))
+
+    return {
+        "template": template,
+        "variables": variables,
+        "prompt": prompt,
+        "token_estimate": token_estimate,
+        "route_config": route_config,
+        "model_name": model_name,
+        "template_name": template_name,
+    }
+
+
+def build_map_prompt_variables(db: Session, book_id: int) -> dict:
+    """Assemble prompt variables for map/worldbuilding generation."""
+    try:
+        template = prompt_builder.load_template("worldbuilding")
+    except (FileNotFoundError, ValueError) as e:
+        return {"error": str(e)}
+
+    # Read current map from Book DB
+    current_map = _read_book_map(db, book_id)
+    if not current_map:
+        current_map = "（暂无地图设定）"
+
+    writing_style_text = _read_book_writing_style(db, book_id)
+    worldview_text = _read_book_worldview(db, book_id)
+
+    variables = {
+        "current_worldview": worldview_text,
+        "writing_style": writing_style_text,
+        "current_map": current_map,
     }
 
     try:

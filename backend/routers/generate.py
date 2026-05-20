@@ -15,6 +15,7 @@ from backend.services.generator import (
     apply_injection_overrides,
     build_arc_prompt_variables,
     build_book_prompt_variables,
+    build_map_prompt_variables,
     build_prompt_variables,
     build_volume_prompt_variables,
     build_worldview_prompt_variables,
@@ -46,6 +47,8 @@ _VARIABLE_LABELS: dict[str, str] = {
     "arc_outlines": "事件纲列表",
     "volume_outlines": "卷纲列表",
     "current_worldview": "当前世界观设定",
+    "current_map": "当前地图设定",
+    "map_data": "地图设定",
 }
 
 
@@ -420,6 +423,92 @@ async def preview_worldview_prompt(
         "token_estimate": ctx["token_estimate"],
         "model": ctx["model_name"],
         "template_name": ctx["template_name"],
+    }
+
+
+# ── Map generation ──────────────────────────────────────────
+
+
+@router.post("/map")
+async def generate_map(
+    book_id: int = Query(..., description="Book ID"),
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stream map content generation via SSE."""
+    ctx = build_map_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.user_prompt:
+        ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
+
+    async def _stream_and_save():
+        full_content = ""
+        async for event in generate_outline_stream(db, ctx):
+            yield event
+            import json
+            if event.startswith("data: "):
+                try:
+                    parsed = json.loads(event[6:].strip())
+                    if parsed.get("event") == "done":
+                        full_content = parsed.get("content", "")
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    pass
+        if full_content:
+            book = book_repo.get_book_for_user(db, book_id, current_user.id)
+            if book:
+                book.map = full_content
+                db.commit()
+
+    return StreamingResponse(
+        _stream_and_save(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/map/preview")
+async def preview_map_prompt(
+    book_id: int = Query(..., description="Book ID"),
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return assembled prompt and metadata for map generation without generating."""
+    ctx = build_map_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
+    return {
+        "prompt": ctx["prompt"],
+        "token_estimate": ctx["token_estimate"],
+        "model": ctx["model_name"],
+        "template_name": ctx["template_name"],
+    }
+
+
+@router.post("/map/injections")
+async def map_injection_items(
+    book_id: int = Query(..., description="Book ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return injection metadata for a map generation."""
+    ctx = build_map_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    return {
+        "items": _build_injection_items(ctx),
+        "template_name": ctx["template_name"],
+        "model": ctx["model_name"],
     }
 
 

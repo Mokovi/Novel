@@ -148,7 +148,7 @@
 import { ref, computed, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import { listCharacters } from '../../api/characters.js'
-import { previewPrompt, previewArcPrompt, previewVolumePrompt, previewBookPrompt, previewWorldviewPrompt } from '../../api/generate.js'
+import { previewPrompt, previewArcPrompt, previewVolumePrompt, previewBookPrompt, previewWorldviewPrompt, previewMapPrompt } from '../../api/generate.js'
 
 const props = defineProps({
   title: { type: String, default: 'AI 生成' },
@@ -306,6 +306,9 @@ async function handlePreview() {
           break
         case 'worldview':
           data = await previewWorldviewPrompt(props.bookId, overrideArg)
+          break
+        case 'map':
+          data = await previewMapPrompt(props.bookId, overrideArg)
           break
         default:
           throw new Error(`Unknown gen type: ${props.genType}`)

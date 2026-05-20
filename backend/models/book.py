@@ -21,6 +21,8 @@ class Book(Base):
     worldview: Mapped[str | None] = mapped_column(Text, nullable=True)
     writing_style: Mapped[str | None] = mapped_column(Text, nullable=True)
     cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    map: Mapped[str | None] = mapped_column(Text, nullable=True)
+    map_format: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),

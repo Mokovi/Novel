@@ -56,6 +56,7 @@ VARIABLE_REGISTRY = [
     {"name": "worldview", "category": "book", "label": "世界观", "editable": True, "editor": "markdown", "help_text": "世界设定，支持 Markdown 格式"},
     {"name": "writing_style", "category": "book", "label": "写作风格", "editable": True, "editor": "markdown", "help_text": "写作风格设定，支持 Markdown 格式"},
     {"name": "book_outline", "category": "book", "label": "全书大纲", "editable": True, "editor": "markdown", "help_text": "全书整体大纲"},
+    {"name": "map_data", "category": "book", "label": "地图设定", "editable": True, "editor": "markdown", "help_text": "地图设定，支持 Markdown 格式"},
     # ── context (read-only, dynamically generated) ──
     {"name": "chapter_title", "category": "context", "label": "当前章节标题", "editable": False, "editor": None, "help_text": "由当前正在生成的章节标题自动填充"},
     {"name": "chapter_summary", "category": "context", "label": "当前章节摘要", "editable": False, "editor": None, "help_text": "由当前章节的摘要自动填充"},
@@ -82,6 +83,7 @@ BOOK_FIELD_MAP = {
     "worldview": "worldview",
     "writing_style": "writing_style",
     "book_outline": "outline",
+    "map_data": "map",
 }
 
 
