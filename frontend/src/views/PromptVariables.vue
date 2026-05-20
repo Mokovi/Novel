@@ -202,7 +202,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { NCard, NSpace } from 'naive-ui'
 import { marked } from 'marked'
-import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateBookWritingStyle, updateBookOutline, getBookWorldview } from '../api/books.js'
+import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateBookOutline, getBookWorldview } from '../api/books.js'
 import { listCharacters } from '../api/characters.js'
 import { generateWorldview, fetchWorldviewInjections } from '../api/generate.js'
 import CharacterForm from '../components/character/CharacterForm.vue'
@@ -349,9 +349,7 @@ async function handleSave(v) {
     else if (name === 'book_outline') await updateBookOutline(bid, { outline: editValues[name] })
     else if (name === 'worldview') await updateBookWorldview(bid, { worldview: editValues[name] })
     else if (name === 'writing_style') {
-      const val = editValues[name]
-      const parsed = val && val.trim() ? JSON.parse(val) : {}
-      await updateBookWritingStyle(bid, parsed)
+      await updateBook(bid, { writing_style: editValues[name] })
     }
     message.success(`${v.label} 已保存`)
   } catch (e) {

@@ -20,13 +20,29 @@ DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
 def _read_writing_style_default() -> str:
-    """Fallback: read writing_style from the JSON file on disk."""
+    """Fallback: read writing_style from the JSON file and format as markdown text."""
     path = DATA_DIR / "writing_style.json"
     if path.exists():
         try:
-            return json.dumps(json.loads(path.read_text("utf-8")), ensure_ascii=False, indent=2)
+            data = json.loads(path.read_text("utf-8"))
         except (json.JSONDecodeError, OSError):
-            pass
+            return ""
+        lines = []
+        if style := data.get("style"):
+            lines.append(f"写作视角与风格：{style}")
+        if taboo := data.get("taboo_words"):
+            lines.append(f"\n禁用词汇：{'、'.join(taboo) if taboo else '（无）'}")
+        else:
+            lines.append("\n禁用词汇：（无）")
+        if techniques := data.get("preferred_techniques"):
+            lines.append("\n偏好技巧：")
+            for t in techniques:
+                lines.append(f"- {t}")
+        if refs := data.get("reference_works"):
+            lines.append("\n参考作品：")
+            for r in refs:
+                lines.append(f"- {r}")
+        return "\n".join(lines)
     return ""
 
 router = APIRouter(prefix="/api/v1/books/{book_id}/prompt-variables", tags=["prompt-variables"])
@@ -38,7 +54,7 @@ VARIABLE_REGISTRY = [
     {"name": "book_name", "category": "book", "label": "书名", "editable": True, "editor": "input", "help_text": "小说的标题"},
     {"name": "book_description", "category": "book", "label": "书籍描述", "editable": True, "editor": "textarea_3", "help_text": "书籍的简要描述"},
     {"name": "worldview", "category": "book", "label": "世界观", "editable": True, "editor": "markdown", "help_text": "世界设定，支持 Markdown 格式"},
-    {"name": "writing_style", "category": "book", "label": "写作风格", "editable": True, "editor": "json", "help_text": "JSON 格式的写作风格配置"},
+    {"name": "writing_style", "category": "book", "label": "写作风格", "editable": True, "editor": "markdown", "help_text": "写作风格设定，支持 Markdown 格式"},
     {"name": "book_outline", "category": "book", "label": "全书大纲", "editable": True, "editor": "markdown", "help_text": "全书整体大纲"},
     # ── context (read-only, dynamically generated) ──
     {"name": "chapter_title", "category": "context", "label": "当前章节标题", "editable": False, "editor": None, "help_text": "由当前正在生成的章节标题自动填充"},
