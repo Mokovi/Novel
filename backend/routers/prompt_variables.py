@@ -5,6 +5,9 @@ Book-type variables are read from the Book ORM; context/derived variables are
 read-only placeholders with help text explaining where they come from.
 """
 
+import json
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -12,6 +15,19 @@ from backend.database import get_db
 from backend.models.user import User
 from backend.repositories import book_repo
 from backend.routers.deps import get_current_user
+
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+
+
+def _read_writing_style_default() -> str:
+    """Fallback: read writing_style from the JSON file on disk."""
+    path = DATA_DIR / "writing_style.json"
+    if path.exists():
+        try:
+            return json.dumps(json.loads(path.read_text("utf-8")), ensure_ascii=False, indent=2)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return ""
 
 router = APIRouter(prefix="/api/v1/books/{book_id}/prompt-variables", tags=["prompt-variables"])
 
@@ -69,7 +85,10 @@ def get_prompt_variables(
         entry = {k: v[k] for k in ("name", "category", "label", "editable", "editor", "help_text")}
         if v["category"] == "book":
             field = BOOK_FIELD_MAP.get(v["name"])
-            entry["value"] = str(getattr(book, field, "") or "")
+            raw = str(getattr(book, field, "") or "")
+            if v["name"] == "writing_style" and not raw:
+                raw = _read_writing_style_default()
+            entry["value"] = raw
         else:
             entry["value"] = ""
         variables.append(entry)

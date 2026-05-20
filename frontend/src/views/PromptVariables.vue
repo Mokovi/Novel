@@ -52,11 +52,10 @@
       </n-tab-pane>
 
       <!-- ═══ 世界观 ═══ -->
-      <!-- ═══ 世界观 ═══ -->
       <n-tab-pane name="worldview" tab="世界观">
         <div class="worldview-section">
           <div class="section-header">
-            <h3>世界观设定</h3>
+            <h3>世界观设定 <span class="var-name-tag" style="margin-left:8px">worldview</span></h3>
             <div class="header-actions">
               <n-button size="small" quaternary @click="handleRefreshWorldview">
                 <template #icon>
@@ -118,7 +117,7 @@
       <n-tab-pane name="characters" tab="人物">
         <div class="character-section">
           <div class="section-header">
-            <h3>人物管理</h3>
+            <h3>人物管理 <span class="var-name-tag" style="margin-left:8px">character_profiles</span></h3>
             <n-button type="primary" size="small" @click="showCreateChar = true">
               <template #icon>
                 <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></n-icon>
@@ -169,7 +168,7 @@
           <div v-for="v in contextVariables" :key="v.name" class="variable-card">
             <div class="card-header">
               <span class="var-label">{{ v.label }}</span>
-              <span class="var-name-tag readonly">只读</span>
+              <span class="var-name-tag readonly">{{ v.name }}</span>
             </div>
             <div class="card-body">
               <div class="readonly-value"><n-text depth="3" class="help-text">{{ v.help_text }}</n-text></div>
@@ -185,7 +184,7 @@
           <div v-for="v in derivedVariables" :key="v.name" class="variable-card">
             <div class="card-header">
               <span class="var-label">{{ v.label }}</span>
-              <span class="var-name-tag readonly">只读</span>
+              <span class="var-name-tag readonly">{{ v.name }}</span>
             </div>
             <div class="card-body">
               <div class="readonly-value"><n-text depth="3" class="help-text">{{ v.help_text }}</n-text></div>
