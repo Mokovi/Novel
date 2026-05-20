@@ -11,6 +11,7 @@
         :key="book.id"
         class="book-card"
         @click="openBook(book.id)"
+        @contextmenu.prevent="onContextMenu($event, book)"
       >
         <div class="book-card-icon">
           <img v-if="book.cover_image" :src="book.cover_image" class="book-cover-img" />
@@ -34,6 +35,9 @@
       </div>
     </div>
 
+    <!-- Context menu -->
+    <ContextMenu ref="contextMenuRef" :options="contextMenuOptions" @select="onContextMenuSelect" />
+
     <!-- Create book dialog -->
     <n-modal v-model:show="showCreateDialog" title="创建新作品" preset="card" style="width: 420px">
       <n-form ref="formRef" :model="newBook" :rules="rules">
@@ -55,14 +59,67 @@
       </template>
     </n-modal>
 
+    <!-- Edit book dialog -->
+    <n-modal v-model:show="showEditDialog" title="编辑作品" preset="card" style="width: 420px">
+      <n-form :model="editForm" :rules="editRules" ref="editFormRef">
+        <n-form-item label="作品名称" path="name">
+          <n-input v-model:value="editForm.name" placeholder="输入作品名称" />
+        </n-form-item>
+        <n-form-item label="作品描述" path="description">
+          <n-input
+            v-model:value="editForm.description"
+            type="textarea"
+            placeholder="可选：简短描述你的作品"
+            :rows="3"
+          />
+        </n-form-item>
+        <n-form-item label="封面图片">
+          <div class="cover-upload-area">
+            <img v-if="editCoverPreview" :src="editCoverPreview" class="cover-preview" />
+            <div v-else class="cover-placeholder">暂无封面</div>
+            <div class="cover-upload-actions">
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style="display: none"
+                @change="onCoverFileChange"
+              />
+              <n-button size="small" @click="fileInputRef?.click()">
+                {{ editCoverPreview ? '更换图片' : '上传图片' }}
+              </n-button>
+              <span v-if="editCoverFile" class="cover-file-name">{{ editCoverFile.name }}</span>
+            </div>
+            <p class="cover-hint">支持 JPG、PNG、WebP 格式，建议 400×600 像素</p>
+          </div>
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <n-button @click="showEditDialog = false" style="margin-right: 12px">取消</n-button>
+        <n-button type="primary" :loading="saving" @click="handleEditSave">保存</n-button>
+      </template>
+    </n-modal>
+
+    <!-- Delete confirmation dialog -->
+    <n-modal v-model:show="showDeleteDialog" title="确认删除" preset="card" style="width: 380px">
+      <p class="delete-warning">
+        确定删除「<strong>{{ deleteTarget?.name }}</strong>」吗？此操作不可撤销，作品下的所有章节数据将一并删除。
+      </p>
+      <template #footer>
+        <n-button @click="showDeleteDialog = false" style="margin-right: 12px">取消</n-button>
+        <n-button type="error" :loading="deleting" @click="handleDeleteConfirm">确认删除</n-button>
+      </template>
+    </n-modal>
+
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NForm, NFormItem, NInput, NModal, useMessage } from 'naive-ui'
 import { useBooksStore } from '../stores/books.js'
+import ContextMenu from '../components/common/ContextMenu.vue'
 
 const router = useRouter()
 const booksStore = useBooksStore()
@@ -106,6 +163,118 @@ async function handleCreate() {
 
 function openBook(id) {
   router.push(`/books/${id}/outline`)
+}
+
+// Context menu
+const contextMenuRef = ref(null)
+const contextTarget = ref(null)
+
+const contextMenuOptions = computed(() => [
+  { label: '编辑信息', key: 'edit' },
+  { label: '更换封面', key: 'change-cover' },
+  { label: '删除作品', key: 'delete', danger: true },
+])
+
+function onContextMenu(e, book) {
+  contextTarget.value = book
+  contextMenuRef.value?.show(e.clientX, e.clientY)
+}
+
+function onContextMenuSelect(key) {
+  const book = contextTarget.value
+  if (!book) return
+  if (key === 'edit') {
+    openEditDialog(book)
+  } else if (key === 'change-cover') {
+    openEditDialog(book, true)
+  } else if (key === 'delete') {
+    openDeleteDialog(book)
+  }
+}
+
+// Edit dialog
+const showEditDialog = ref(false)
+const editFormRef = ref(null)
+const saving = ref(false)
+const editForm = reactive({ name: '', description: '' })
+const editBookId = ref(null)
+const editCoverPreview = ref('')
+const editCoverFile = ref(null)
+const fileInputRef = ref(null)
+const editFocusCover = ref(false)
+
+const editRules = {
+  name: [{ required: true, message: '请输入作品名称', trigger: 'blur' }],
+}
+
+function openEditDialog(book, focusCover = false) {
+  editBookId.value = book.id
+  editForm.name = book.name
+  editForm.description = book.description || ''
+  editCoverPreview.value = book.cover_image || ''
+  editCoverFile.value = null
+  editFocusCover.value = focusCover
+  showEditDialog.value = true
+}
+
+function onCoverFileChange(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  editCoverFile.value = file
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    editCoverPreview.value = ev.target.result
+  }
+  reader.readAsDataURL(file)
+}
+
+async function handleEditSave() {
+  try {
+    await editFormRef.value?.validate()
+  } catch {
+    return
+  }
+  saving.value = true
+  try {
+    await booksStore.updateBook(editBookId.value, {
+      name: editForm.name,
+      description: editForm.description,
+    })
+    if (editCoverFile.value) {
+      await booksStore.uploadCover(editBookId.value, editCoverFile.value)
+    }
+    message.success('作品信息已更新')
+    showEditDialog.value = false
+  } catch (e) {
+    message.error(e.response?.data?.detail || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+// Delete dialog
+const showDeleteDialog = ref(false)
+const deleteTarget = ref(null)
+const deleting = ref(false)
+
+function openDeleteDialog(book) {
+  deleteTarget.value = book
+  showDeleteDialog.value = true
+}
+
+async function handleDeleteConfirm() {
+  if (!deleteTarget.value) return
+  deleting.value = true
+  try {
+    await booksStore.deleteBook(deleteTarget.value.id)
+    message.success('作品已删除')
+    showDeleteDialog.value = false
+    deleteTarget.value = null
+  } catch (e) {
+    message.error(e.response?.data?.detail || '删除失败')
+  } finally {
+    deleting.value = false
+  }
 }
 
 onMounted(() => {
@@ -211,5 +380,57 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Cover upload area */
+.cover-upload-area {
+  width: 100%;
+}
+.cover-preview {
+  width: 120px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  display: block;
+  margin-bottom: 8px;
+}
+.cover-placeholder {
+  width: 120px;
+  height: 160px;
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.cover-upload-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cover-file-name {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+.cover-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* Delete warning */
+.delete-warning {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text);
 }
 </style>

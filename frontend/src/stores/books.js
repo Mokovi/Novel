@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { listBooks, getBook, createBook as apiCreateBook } from '../api/books.js'
+import { listBooks, getBook, createBook as apiCreateBook, updateBook as apiUpdateBook, deleteBook as apiDeleteBook, uploadCover as apiUploadCover } from '../api/books.js'
 
 export const useBooksStore = defineStore('books', () => {
   const books = ref([])
@@ -39,6 +39,28 @@ export const useBooksStore = defineStore('books', () => {
     return res.data
   }
 
+  async function updateBook(id, data) {
+    const res = await apiUpdateBook(id, data)
+    const idx = books.value.findIndex(b => b.id === id)
+    if (idx !== -1) books.value[idx] = { ...books.value[idx], ...res.data }
+    if (currentBook.value?.id === id) currentBook.value = { ...currentBook.value, ...res.data }
+    return res.data
+  }
+
+  async function deleteBook(id) {
+    await apiDeleteBook(id)
+    books.value = books.value.filter(b => b.id !== id)
+    if (currentBook.value?.id === id) clearCurrentBook()
+  }
+
+  async function uploadCover(bookId, file) {
+    const res = await apiUploadCover(bookId, file, true)
+    const idx = books.value.findIndex(b => b.id === bookId)
+    if (idx !== -1) books.value[idx] = { ...books.value[idx], cover_image: res.data.cover_image }
+    if (currentBook.value?.id === bookId) currentBook.value = { ...currentBook.value, cover_image: res.data.cover_image }
+    return res.data
+  }
+
   return {
     books,
     currentBook,
@@ -47,5 +69,8 @@ export const useBooksStore = defineStore('books', () => {
     selectBook,
     clearCurrentBook,
     createBook,
+    updateBook,
+    deleteBook,
+    uploadCover,
   }
 })
