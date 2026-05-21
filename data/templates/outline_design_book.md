@@ -12,6 +12,7 @@ optional_variables:
   - writing_style
   - character_profiles
   - book_description
+  - map_data
 ---
 
 You are a novelist designing the outline for an entire book. Follow the instructions below precisely.
@@ -40,6 +41,12 @@ You are a novelist designing the outline for an entire book. Follow the instruct
 
 {{character_profiles}}
 {{/character_profiles}}
+
+{{#map_data}}
+## Map & Locations
+
+{{map_data}}
+{{/map_data}}
 
 ## Volume Outlines
 

@@ -13,6 +13,7 @@ optional_variables:
   - character_profiles
   - chapter_outline
   - previous_chapter_summary
+  - map_data
 ---
 
 You are a novelist writing a chapter of a long-form novel. Follow the instructions below precisely.
@@ -44,6 +45,12 @@ You are a novelist writing a chapter of a long-form novel. Follow the instructio
 ## World Setting
 
 {{worldview}}
+
+{{#map_data}}
+## Map & Locations
+
+{{map_data}}
+{{/map_data}}
 
 {{#character_profiles}}
 ## Character Profiles

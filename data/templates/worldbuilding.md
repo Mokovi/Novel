@@ -8,6 +8,7 @@ required_variables:
   - current_worldview
 optional_variables:
   - writing_style
+  - map_data
 ---
 
 You are a world-building assistant for a novel. Based on the existing world settings and writing style below, generate or expand structured world-building content.
@@ -36,6 +37,12 @@ If there are important terms that need definition, incorporate them naturally in
 
 {{writing_style}}
 {{/writing_style}}
+
+{{#map_data}}
+## Map & Locations
+
+{{map_data}}
+{{/map_data}}
 
 ## Current World Settings
 

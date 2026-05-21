@@ -131,11 +131,17 @@ def _read_book_outline(db: Session, book_id: int) -> str:
 
 
 def _read_book_map(db: Session, book_id: int) -> str:
-    """Load map from Book DB record."""
+    """Load map from Book DB record, combined with location profiles."""
     book = book_repo.get_book(db, book_id)
+    parts = []
     if book and book.map:
-        return book.map
-    return ""
+        parts.append(book.map)
+    # Append location card profiles from the locations table
+    from backend.repositories import location_repo
+    locs = location_repo.list_locations(db, book_id=book_id)
+    if locs:
+        parts.append(_format_location_profiles(locs))
+    return "\n\n".join(parts) if parts else ""
 
 
 # ── Streaming helpers ──────────────────────────────────────

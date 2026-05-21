@@ -15,6 +15,7 @@ optional_variables:
   - book_outline
   - book_name
   - book_description
+  - map_data
 ---
 
 You are a novelist designing the outline for a volume of a long-form novel. Follow the instructions below precisely.
@@ -52,6 +53,12 @@ You are a novelist designing the outline for a volume of a long-form novel. Foll
 
 {{character_profiles}}
 {{/character_profiles}}
+
+{{#map_data}}
+## Map & Locations
+
+{{map_data}}
+{{/map_data}}
 
 {{#book_outline}}
 ## Book Outline
