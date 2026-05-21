@@ -71,7 +71,12 @@
       <transition name="outline-slide">
         <div v-if="showBookOutline" class="preface-body">
           <div v-if="bookOutline" class="outline-editor">
-            <div v-if="outlineMode.book === 'preview'" class="markdown-body" v-html="renderMarkdown(bookOutline)" />
+            <div v-if="outlineMode.book === 'preview'" class="preview-wrapper">
+              <button class="copy-btn" @click="copyText(bookOutline)" title="复制内容">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+              <div class="markdown-body" v-html="renderMarkdown(bookOutline)" />
+            </div>
             <textarea
               v-else
               v-model="bookOutline"
@@ -150,7 +155,12 @@
         <transition name="outline-slide">
           <div v-if="showVolumeOutline[vol.id]" class="volume-outline">
             <div v-if="volOutlines[vol.id]" class="outline-editor">
-              <div v-if="outlineMode[`vol_${vol.id}`] === 'preview'" class="markdown-body" v-html="renderMarkdown(volOutlines[vol.id])" />
+              <div v-if="outlineMode[`vol_${vol.id}`] === 'preview'" class="preview-wrapper">
+                <button class="copy-btn" @click="copyText(volOutlines[vol.id])" title="复制内容">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+                <div class="markdown-body" v-html="renderMarkdown(volOutlines[vol.id])" />
+              </div>
               <textarea
                 v-else
                 v-model="volOutlines[vol.id]"
@@ -231,7 +241,12 @@
               <transition name="outline-slide">
                 <div v-if="showArcOutline[arc.id]" class="arc-outline-section">
                   <div v-if="arcOutlines[arc.id]" class="outline-editor">
-                    <div v-if="outlineMode[`arc_${arc.id}`] === 'preview'" class="markdown-body" v-html="renderMarkdown(arcOutlines[arc.id])" />
+                    <div v-if="outlineMode[`arc_${arc.id}`] === 'preview'" class="preview-wrapper">
+                      <button class="copy-btn" @click="copyText(arcOutlines[arc.id])" title="复制内容">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      </button>
+                      <div class="markdown-body" v-html="renderMarkdown(arcOutlines[arc.id])" />
+                    </div>
                     <textarea
                       v-else
                       v-model="arcOutlines[arc.id]"
@@ -470,7 +485,12 @@
         <div v-if="genPhase !== 'idle'" class="gen-output">
           <p v-if="genModel" class="gen-meta">模型: {{ genModel }} | 预估: {{ genTokens }} tokens</p>
           <div v-if="genPhase === 'generating'" class="gen-text">{{ genOutput }}</div>
-          <div v-else class="markdown-body" v-html="renderMarkdown(genOutput)" />
+          <div v-else class="preview-wrapper">
+            <button class="copy-btn" @click="copyText(genOutput)" title="复制内容">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+            <div class="markdown-body" v-html="renderMarkdown(genOutput)" />
+          </div>
           <n-spin v-if="genRunning" size="small" />
         </div>
         <template #action>
@@ -523,6 +543,15 @@ const router = useRouter()
 const route = useRoute()
 const message = useMessage()
 const store = useChaptersStore()
+
+function copyText(text) {
+  if (!text) return
+  navigator.clipboard.writeText(text).then(() => {
+    message.success('已复制')
+  }).catch(() => {
+    message.warning('复制失败')
+  })
+}
 const settingsStore = useSettingsStore()
 
 const bookId = computed(() => Number(route.params.bookId))
@@ -1835,6 +1864,37 @@ onMounted(async () => {
   background: var(--color-accent-light);
   box-shadow: 0 4px 16px rgba(201, 169, 78, 0.4);
   transform: translateY(-1px);
+}
+
+/* ── Copy button ── */
+.preview-wrapper {
+  position: relative;
+}
+.preview-wrapper .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.9);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.preview-wrapper:hover .copy-btn {
+  opacity: 1;
+}
+.preview-wrapper .copy-btn:hover {
+  background: #fff;
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 /* ── Markdown Body ── */

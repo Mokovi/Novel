@@ -32,7 +32,12 @@
         <button class="mode-btn" :class="{ active: isPreviewMode }" @click="isPreviewMode = true">预览</button>
         <button class="mode-btn" :class="{ active: !isPreviewMode }" @click="isPreviewMode = false">编辑</button>
       </div>
-      <div v-if="isPreviewMode" class="markdown-preview" v-html="renderMarkdown(store.worldview)" />
+      <div v-if="isPreviewMode" class="preview-wrapper">
+        <button class="copy-btn" @click="copyText(store.worldview)" title="复制内容">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <div class="markdown-preview" v-html="renderMarkdown(store.worldview)" />
+      </div>
       <textarea
         v-else
         v-model="store.worldview"
@@ -77,7 +82,12 @@
         <div v-if="genPhase !== 'idle'" class="gen-output">
           <p v-if="genModel" class="gen-meta">模型: {{ genModel }} | 预估: {{ genTokens }} tokens</p>
           <div v-if="genPhase === 'generating'" class="gen-text">{{ genOutput }}</div>
-          <div v-else class="markdown-body" v-html="renderMarkdown(genOutput)" />
+          <div v-else class="preview-wrapper">
+            <button class="copy-btn" @click="copyText(genOutput)" title="复制内容">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+            <div class="markdown-body" v-html="renderMarkdown(genOutput)" />
+          </div>
           <n-spin v-if="genRunning" size="small" />
         </div>
         <template #action>
@@ -112,6 +122,15 @@ const bookId = computed(() => Number(route.params.bookId))
 
 const showPreview = ref(false)
 const isPreviewMode = ref(true)
+
+function copyText(text) {
+  if (!text) return
+  navigator.clipboard.writeText(text).then(() => {
+    message.success('已复制')
+  }).catch(() => {
+    message.warning('复制失败')
+  })
+}
 
 const preview = computed(() => ({
   text: store.previewText,
@@ -365,5 +384,36 @@ function closeGenModal() {
   line-height: 1.8;
   color: var(--color-text);
   overflow-y: auto;
+}
+
+/* ── Copy button ── */
+.preview-wrapper {
+  position: relative;
+}
+.preview-wrapper .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.9);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.preview-wrapper:hover .copy-btn {
+  opacity: 1;
+}
+.preview-wrapper .copy-btn:hover {
+  background: #fff;
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 </style>
