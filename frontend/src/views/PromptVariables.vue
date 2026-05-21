@@ -209,12 +209,32 @@
         <div class="character-section">
           <div class="section-header">
             <h3>人物管理 <span class="var-name-tag" style="margin-left:8px">character_profiles</span></h3>
-            <n-button type="primary" size="small" @click="showCreateChar = true">
-              <template #icon>
-                <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></n-icon>
-              </template>
-              新建人物
-            </n-button>
+            <div class="header-actions">
+              <n-button size="small" quaternary @click="handleExportCharacters">
+                <template #icon>
+                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></n-icon>
+                </template>
+                导出
+              </n-button>
+              <n-button size="small" quaternary @click="handleImportClick">
+                <template #icon>
+                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></n-icon>
+                </template>
+                导入
+              </n-button>
+              <n-button size="small" @click="prepareGenerateCharacters">
+                <template #icon>
+                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" fill="none"/></svg></n-icon>
+                </template>
+                AI 生成人物
+              </n-button>
+              <n-button type="primary" size="small" @click="showCreateChar = true">
+                <template #icon>
+                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></n-icon>
+                </template>
+                新建人物
+              </n-button>
+            </div>
           </div>
           <div class="filter-bar">
             <n-radio-group v-model:value="charRoleFilter" size="small" @update:value="fetchCharacters">
@@ -248,6 +268,44 @@
           <!-- Create character modal -->
           <n-modal v-model:show="showCreateChar" preset="card" title="新建人物" style="width: 520px" segmented>
             <CharacterForm :book-id="bookId" @saved="onCharCreated" @cancel="showCreateChar = false" />
+          </n-modal>
+
+          <!-- ═══ Character SSE Generation Modal ═══ -->
+          <n-modal v-model:show="showCharGenModal" :mask-closable="false" style="width: 720px">
+            <n-card title="AI 生成人物" style="max-height: 80vh; overflow-y: auto; border-radius: 12px">
+              <div v-if="charGenPhase === 'idle'">
+                <PromptInjectionPanel
+                  title="AI 生成人物"
+                  :injection-items="charInjectionItems"
+                  :book-id="bookId"
+                  :loading="charGenRunning"
+                  gen-type="character"
+                  @start="startCharGen"
+                  @cancel="showCharGenModal = false"
+                />
+              </div>
+              <div v-if="charGenPhase !== 'idle'" class="gen-output">
+                <p v-if="charGenModel" class="gen-meta">模型: {{ charGenModel }} | 预估: {{ charGenTokens }} tokens</p>
+                <div v-if="charGenPhase === 'generating'" class="gen-text">{{ charGenOutput }}</div>
+                <div v-else class="preview-wrapper">
+                  <button class="copy-btn" @click="copyText(charGenOutput)" title="复制内容">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </button>
+                  <div class="markdown-body" v-html="renderMarkdown(charGenOutput)" />
+                </div>
+                <n-spin v-if="charGenRunning" size="small" />
+              </div>
+              <template #action>
+                <n-space justify="end">
+                  <template v-if="charGenPhase === 'generating'">
+                    <n-button @click="cancelCharGeneration">取消</n-button>
+                  </template>
+                  <template v-else-if="charGenPhase === 'done'">
+                    <n-button type="primary" @click="closeCharGenModal">关闭</n-button>
+                  </template>
+                </n-space>
+              </template>
+            </n-card>
           </n-modal>
         </div>
       </n-tab-pane>
@@ -294,8 +352,8 @@ import { useMessage } from 'naive-ui'
 import { NCard, NSpace } from 'naive-ui'
 import { marked } from 'marked'
 import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateBookOutline, getBookWorldview, getBookMap, updateBookMap } from '../api/books.js'
-import { listCharacters } from '../api/characters.js'
-import { generateWorldview, fetchWorldviewInjections, generateMap, fetchMapInjections } from '../api/generate.js'
+import { listCharacters, importCharacters } from '../api/characters.js'
+import { generateWorldview, fetchWorldviewInjections, generateMap, fetchMapInjections, generateCharacters, fetchCharacterInjections } from '../api/generate.js'
 import CharacterForm from '../components/character/CharacterForm.vue'
 import PromptInjectionPanel from '../components/generate/PromptInjectionPanel.vue'
 
@@ -351,6 +409,16 @@ const characters = ref([])
 const charLoading = ref(false)
 const charRoleFilter = ref('')
 const showCreateChar = ref(false)
+
+// ── Character generation state ──
+const showCharGenModal = ref(false)
+const charGenOutput = ref('')
+const charGenModel = ref('')
+const charGenTokens = ref(0)
+const charGenRunning = ref(false)
+const charGenAbort = ref(null)
+const charGenPhase = ref('idle') // 'idle' | 'generating' | 'done'
+const charInjectionItems = ref([])
 
 // ── Map tab state ──
 const mapText = ref('')
@@ -644,6 +712,128 @@ async function handleRefreshMap() {
   mapLoaded.value = false
   await loadMap()
   message.success('已刷新')
+}
+
+// ── Character import/export handlers ──
+
+function handleExportCharacters() {
+  const data = characters.value.map(c => ({
+    name: c.name,
+    aliases: c.aliases || null,
+    role_type: c.role_type || null,
+    status: c.status || 'active',
+    description: c.description || null,
+    appearance: c.appearance || null,
+    personality: c.personality || null,
+    background: c.background || null,
+    goals: c.goals || null,
+  }))
+  const blob = new Blob(
+    [JSON.stringify({ format_version: 1, characters: data }, null, 2)],
+    { type: 'application/json' },
+  )
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `characters_${bookId.value}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  message.success('导出成功')
+}
+
+function handleImportClick() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json'
+  input.style.display = 'none'
+  input.addEventListener('change', handleFileSelected)
+  document.body.appendChild(input)
+  input.click()
+  document.body.removeChild(input)
+}
+
+async function handleFileSelected(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    const text = await file.text()
+    const data = JSON.parse(text)
+    if (!data.characters || !Array.isArray(data.characters)) {
+      message.error('无效的导入文件：缺少 characters 数组')
+      return
+    }
+    const res = await importCharacters(bookId.value, data)
+    const result = res.data
+    if (result.errors?.length) {
+      message.warning(`导入完成，${result.created_count} 条成功，${result.skipped_count} 条跳过`)
+      console.warn('Import errors:', result.errors)
+    } else {
+      message.success(`成功导入 ${result.created_count} 个人物`)
+    }
+    await fetchCharacters()
+  } catch (err) {
+    message.error('导入失败: ' + (err.response?.data?.detail || err.message))
+  }
+}
+
+// ── Character generation handlers ──
+
+async function prepareGenerateCharacters() {
+  charGenOutput.value = ''
+  charGenModel.value = ''
+  charGenTokens.value = 0
+  charGenRunning.value = false
+  charGenPhase.value = 'idle'
+  charInjectionItems.value = []
+  showCharGenModal.value = true
+  try {
+    const data = await fetchCharacterInjections(bookId.value)
+    charInjectionItems.value = data.items || []
+  } catch (e) {
+    console.error('Failed to fetch character injection items:', e)
+  }
+}
+
+function startCharGen(overrides, userPrompt) {
+  charGenPhase.value = 'generating'
+  charGenRunning.value = true
+
+  const body = { user_prompt: userPrompt || '' }
+  if (overrides && (overrides.exclude_variables?.length || overrides.extra_variables || overrides.added_character_ids?.length)) {
+    body.injection_overrides = overrides
+  }
+
+  charGenAbort.value = generateCharacters(bookId.value, {
+    onStart: (evt) => {
+      charGenModel.value = evt.model || ''
+      charGenTokens.value = evt.token_estimate || 0
+    },
+    onToken: (token) => {
+      charGenOutput.value += token
+    },
+    onDone: () => {
+      charGenRunning.value = false
+      charGenPhase.value = 'done'
+      message.success('人物生成完成')
+    },
+    onError: (err) => {
+      charGenRunning.value = false
+      charGenPhase.value = 'done'
+      message.error(err)
+    },
+  }, body)
+}
+
+function cancelCharGeneration() {
+  charGenAbort.value?.abort()
+  charGenRunning.value = false
+  charGenPhase.value = 'idle'
+  message.info('已取消生成')
+}
+
+function closeCharGenModal() {
+  showCharGenModal.value = false
+  fetchCharacters()
 }
 
 async function handleRefresh() {

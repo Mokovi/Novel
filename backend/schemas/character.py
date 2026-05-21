@@ -67,3 +67,26 @@ class CharacterRelationResponse(BaseModel):
     description: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+class CharacterImportItem(BaseModel):
+    name: str = Field(..., max_length=255, description="Character name")
+    aliases: Optional[str] = None
+    role_type: Optional[str] = Field(None, max_length=50)
+    status: str = "active"
+    description: Optional[str] = None
+    appearance: Optional[str] = None
+    personality: Optional[str] = None
+    background: Optional[str] = None
+    goals: Optional[str] = None
+
+
+class CharacterImportRequest(BaseModel):
+    format_version: int = 1
+    characters: list[CharacterImportItem]
+
+
+class CharacterImportResult(BaseModel):
+    created_count: int = 0
+    skipped_count: int = 0
+    errors: list[str] = []

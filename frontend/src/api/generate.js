@@ -219,6 +219,17 @@ export async function fetchMapInjections(bookId) {
   return injectionFetch(`${BASE}/generate/map/injections?book_id=${bookId}`)
 }
 
+// ── Character generation ────────────────────────────────────
+
+export function generateCharacters(bookId, handlers, overrides = {}) {
+  const url = `${BASE}/generate/characters?book_id=${bookId}`
+  return consumeSSE(url, handlers, overrides, getToken())
+}
+
+export async function fetchCharacterInjections(bookId) {
+  return injectionFetch(`${BASE}/generate/characters/injections?book_id=${bookId}`)
+}
+
 // ── Book-scoped generate APIs ─────────────────────────────
 
 export function generateBookOutlineScoped(bookId, handlers, overrides = {}) {

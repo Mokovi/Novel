@@ -15,6 +15,7 @@ from backend.services.generator import (
     apply_injection_overrides,
     build_arc_prompt_variables,
     build_book_prompt_variables,
+    build_character_prompt_variables,
     build_map_prompt_variables,
     build_prompt_variables,
     build_volume_prompt_variables,
@@ -49,6 +50,7 @@ _VARIABLE_LABELS: dict[str, str] = {
     "current_worldview": "当前世界观设定",
     "current_map": "当前地图设定",
     "map_data": "地图设定",
+    "current_characters": "当前人物列表",
 }
 
 
@@ -503,6 +505,74 @@ async def map_injection_items(
 ):
     """Return injection metadata for a map generation."""
     ctx = build_map_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    return {
+        "items": _build_injection_items(ctx),
+        "template_name": ctx["template_name"],
+        "model": ctx["model_name"],
+    }
+
+
+# ── Character generation ─────────────────────────────────────
+
+
+@router.post("/characters")
+async def generate_characters(
+    book_id: int = Query(..., description="Book ID"),
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stream character profile generation via SSE."""
+    ctx = build_character_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.user_prompt:
+        ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
+
+    return StreamingResponse(
+        generate_outline_stream(db, ctx),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/characters/preview")
+async def preview_character_prompt(
+    book_id: int = Query(..., description="Book ID"),
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return assembled prompt and metadata for character generation without generating."""
+    ctx = build_character_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
+    return {
+        "prompt": ctx["prompt"],
+        "token_estimate": ctx["token_estimate"],
+        "model": ctx["model_name"],
+        "template_name": ctx["template_name"],
+    }
+
+
+@router.post("/characters/injections")
+async def character_injection_items(
+    book_id: int = Query(..., description="Book ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return injection metadata for a character generation."""
+    ctx = build_character_prompt_variables(db, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=400, detail=ctx["error"])
     return {

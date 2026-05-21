@@ -59,6 +59,37 @@ def update_character(
     return character
 
 
+def bulk_create_characters(
+    db: Session, characters_data: list[dict], book_id: int
+) -> dict:
+    """Create multiple characters in bulk, accumulating errors without interrupting.
+
+    Returns ``{created_count, skipped_count, errors}``.
+    """
+    created_count = 0
+    skipped_count = 0
+    errors = []
+    for data in characters_data:
+        name = data.get("name", "").strip()
+        if not name:
+            skipped_count += 1
+            errors.append("Skipped item with empty name")
+            continue
+        try:
+            from backend.schemas.character import CharacterCreate
+
+            obj = CharacterCreate(**data)
+            character = Character(**obj.model_dump(), book_id=book_id)
+            db.add(character)
+            db.flush()
+            created_count += 1
+        except Exception as e:
+            skipped_count += 1
+            errors.append(f"Failed to import '{name}': {e}")
+    db.commit()
+    return {"created_count": created_count, "skipped_count": skipped_count, "errors": errors}
+
+
 def delete_character(db: Session, character_id: int) -> bool:
     character = db.get(Character, character_id)
     if not character:

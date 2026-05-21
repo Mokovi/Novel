@@ -49,3 +49,7 @@ export function createBookCharacter(bookId, data) {
 export function getBookRelationsGraph(bookId) {
   return http.get(`/books/${bookId}/characters/relations`)
 }
+
+export function importCharacters(bookId, data) {
+  return http.post('/characters/import', data, { params: { book_id: bookId } })
+}

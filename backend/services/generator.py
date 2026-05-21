@@ -892,6 +892,62 @@ def build_map_prompt_variables(db: Session, book_id: int) -> dict:
     }
 
 
+def build_character_prompt_variables(db: Session, book_id: int) -> dict:
+    """Assemble prompt variables for generating character profiles."""
+    try:
+        template = prompt_builder.load_template("character_design")
+    except (FileNotFoundError, ValueError) as e:
+        return {"error": str(e)}
+
+    book = book_repo.get_book(db, book_id)
+    book_name = book.name if book else ""
+    book_description = book.description if book else ""
+
+    worldview_text = _read_book_worldview(db, book_id)
+    if not worldview_text:
+        worldview_text = "（暂无世界观设定）"
+
+    writing_style_text = _read_book_writing_style(db, book_id)
+
+    from backend.repositories import character_repo
+    chars = character_repo.list_characters(db, book_id=book_id)
+    if chars:
+        current_characters = _format_character_profiles(chars)
+    else:
+        current_characters = "（暂无已创建角色）"
+
+    variables = {
+        "worldview": worldview_text,
+        "current_characters": current_characters,
+        "book_name": book_name,
+        "book_description": book_description or "",
+        "writing_style": writing_style_text,
+        "map_data": _read_book_map(db, book_id),
+    }
+
+    try:
+        prompt = prompt_builder.build_prompt(template, variables)
+    except ValueError as e:
+        return {"error": str(e)}
+
+    token_estimate = prompt_builder.estimate_tokens(prompt)
+    route_config = resolve_api_for_task(db, "character_design")
+    if not route_config or not route_config.get("api_key"):
+        return {"error": "No API configured for character_design task"}
+    model_name = route_config.get("model_name", "")
+    template_name = template.get("frontmatter", {}).get("name", template.get("file_name", ""))
+
+    return {
+        "template": template,
+        "variables": variables,
+        "prompt": prompt,
+        "token_estimate": token_estimate,
+        "route_config": route_config,
+        "model_name": model_name,
+        "template_name": template_name,
+    }
+
+
 async def generate_outline_stream(
     db: Session,
     prompt_ctx: dict,

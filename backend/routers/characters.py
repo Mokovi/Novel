@@ -9,6 +9,8 @@ from backend.routers.deps import get_current_user
 from backend.repositories import character_repo, book_repo
 from backend.schemas.character import (
     CharacterCreate,
+    CharacterImportRequest,
+    CharacterImportResult,
     CharacterRelationCreate,
     CharacterRelationResponse,
     CharacterRelationUpdate,
@@ -130,6 +132,19 @@ def update_character(
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
     return character
+
+
+@router.post("/import", response_model=CharacterImportResult)
+def import_characters(
+    body: CharacterImportRequest,
+    book_id: int = Query(..., description="Book ID to import characters into"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Bulk import characters from a JSON payload."""
+    book_repo.get_book_for_user(db, book_id, current_user.id)
+    data_list = [c.model_dump() for c in body.characters]
+    return character_repo.bulk_create_characters(db, data_list, book_id)
 
 
 @router.delete("/{character_id}", status_code=204)
