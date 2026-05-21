@@ -1,8 +1,7 @@
 ---
-description: Generate structured character profiles based on worldview, existing characters,
-  and writing style.
+description: 根据世界观、现有角色和文风生成结构化的角色档案
 is_default: true
-name: Character Design Generation
+name: 角色设计生成
 optional_variables:
 - book_name
 - book_description
@@ -15,55 +14,55 @@ task_type: character_design
 version: '1'
 ---
 
-You are a character design assistant for a novel. Based on the existing world settings, writing style, and current character list below, generate new character profiles.
+你是一位小说角色设计助手。请根据现有的世界观设定、文风和当前角色列表，生成新的角色档案。
 
-Use **Markdown format** with the following structure for each character:
+使用 **Markdown 格式**，每个角色按以下结构编写：
 
 ## 角色名
 
 - **角色类型**: protagonist / antagonist / supporting / minor
 - **状态**: active / deceased
-- **别名**: (if applicable)
-- **描述**: Brief description of the character's role and significance
-- **外貌**: Physical appearance description
-- **性格**: Personality traits and psychological profile
-- **背景**: Backstory and history
-- **目标**: Goals, motivations, and desires
+- **别名**:（如有）
+- **描述**: 角色在故事中的作用和重要性概述
+- **外貌**: 外貌特征描述
+- **性格**: 性格特点与心理画像
+- **背景**: 身世背景与过往经历
+- **目标**: 目标、动机与渴望
 
-Generate 3-5 diverse character profiles that fit the world setting and fill gaps in the existing character roster. Make each character distinct in role, personality, and background. 如果用户指定生成数量，按用户的要求。
+生成 3-5 个多样化的角色档案，使其契合世界观设定并补足现有角色阵容的空白。确保每个角色在作用、性格和背景上各有特色。如果用户指定了生成数量，按用户的要求执行。
 
 {{#book_name}}
-## Book Name
+## 作品名称
 
 {{book_name}}
 {{/book_name}}
 
 {{#book_description}}
-## Book Description
+## 作品简介
 
 {{book_description}}
 {{/book_description}}
 
 {{#writing_style}}
-## Writing Style
+## 文风要求
 
 {{writing_style}}
 {{/writing_style}}
 
 {{#map_data}}
-## Map Data
+## 地图数据
 
 {{map_data}}
 {{/map_data}}
 
-## World Settings
+## 世界观设定
 
 {{worldview}}
 
-## Current Characters
+## 当前角色列表
 
 {{current_characters}}
 
 ---
 
-Generate markdown content with character profiles following the format above. Create characters that are well-integrated with the existing world and complement the current character roster. Only output the character profiles, no additional explanation.
+按上述格式生成角色档案的 Markdown 内容。创建的角色应很好地融入现有世界观并与当前角色阵容互补。只输出角色档案，无需额外说明。

@@ -1,82 +1,82 @@
 ---
-task_type: outline_design
-name: Volume Outline Design
+description: 根据卷的描述及其构成事件的大纲，为整卷生成大纲
 is_default: false
-version: 1.0
-description: Generate an outline for a volume based on its description and the outlines of its constituent arcs.
-required_variables:
-  - volume_title
-  - volume_description
-  - arc_outlines
+name: 卷大纲设计
 optional_variables:
-  - worldview
-  - writing_style
-  - character_profiles
-  - book_outline
-  - book_name
-  - book_description
-  - map_data
+- worldview
+- writing_style
+- character_profiles
+- book_outline
+- book_name
+- book_description
+- map_data
+required_variables:
+- volume_title
+- volume_description
+- arc_outlines
+task_type: outline_design
+version: '1'
 ---
 
-You are a novelist designing the outline for a volume of a long-form novel. Follow the instructions below precisely.
+你是一位长篇小说作家，正在为其中一卷设计大纲。请严格按照以下指令执行。
 
-## Volume Title
+## 卷标题
 
 {{volume_title}}
 
-## Volume Description
+## 卷描述
 
 {{volume_description}}
 
 {{#book_name}}
-## Book
-- Title: {{book_name}}
+## 作品
+- 标题：{{book_name}}
 {{#book_description}}
-- Description: {{book_description}}
+- 简介：{{book_description}}
 {{/book_description}}
 {{/book_name}}
 
 {{#writing_style}}
-## Writing Style
+## 文风要求
 
 {{writing_style}}
 {{/writing_style}}
 
 {{#worldview}}
-## World Setting
+## 世界观设定
 
 {{worldview}}
 {{/worldview}}
 
 {{#character_profiles}}
-## Character Profiles
+## 角色档案
 
 {{character_profiles}}
 {{/character_profiles}}
 
 {{#map_data}}
-## Map & Locations
+## 地图与地点
 
 {{map_data}}
 {{/map_data}}
 
 {{#book_outline}}
-## Book Outline
+## 全书大纲
 
 {{book_outline}}
 {{/book_outline}}
 
-## Arc Outlines
+## 事件大纲
 
 {{arc_outlines}}
 
 ---
 
-Based on the volume description and the outlines of its arcs above, write a comprehensive volume outline. The outline should:
+根据以上卷描述和其构成事件的大纲，编写全面的卷大纲。大纲应：
 
-1. Describe the overall narrative structure of the volume
-2. Explain how the arcs connect and flow into each other
-3. Identify major thematic elements and character developments
-4. Provide guidance for the overall pacing and progression
+1. 描述整卷的整体叙事结构
+2. 说明各事件如何衔接和相互推进
+3. 确定主要主题元素和角色发展
+4. 为整体节奏和进展提供指导
 
-Write the outline in Chinese, targeting 500-1000 words. Only output the outline content, no additional explanation.
+用中文编写大纲，没有字数限制。只输出大纲内容，无需额外说明。

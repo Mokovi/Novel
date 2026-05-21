@@ -1,70 +1,68 @@
 ---
-task_type: chapter_writing
-name: Chapter Writing Default
+description: 根据摘要、世界观和文风生成章节正文的默认模板
 is_default: true
-version: 1.0
-description: Default template for generating chapter prose based on summary, world setting, and writing style.
-required_variables:
-  - chapter_title
-  - chapter_summary
-  - writing_style
-  - worldview
+name: 章节写作
 optional_variables:
-  - character_profiles
-  - chapter_outline
-  - previous_chapter_summary
-  - map_data
-  - current_chapter_content
+- character_profiles
+- chapter_outline
+- previous_chapter_summary
+- map_data
+- current_chapter_content
+required_variables:
+- writing_style
+- worldview
+task_type: chapter_writing
+version: '1'
 ---
 
-You are a novelist writing a chapter of a long-form novel. Follow the instructions below precisely.
+你是一位长篇小说作家，请严格按照以下指令创作章节内容。
 
-## Chapter Title
+## 章节标题
 
 {{chapter_title}}
 
-## Chapter Summary
+## 章节摘要
 
 {{chapter_summary}}
 
 {{#current_chapter_content}}
-## Current Chapter Content
+## 当前章节内容
 
 {{current_chapter_content}}
 {{/current_chapter_content}}
 
 {{#chapter_outline}}
-## Chapter Outline
+## 章节大纲
 
 {{chapter_outline}}
 {{/chapter_outline}}
 
 {{#previous_chapter_summary}}
-## Previous Chapter Recap
+## 前文回顾
 
 {{previous_chapter_summary}}
 {{/previous_chapter_summary}}
 
-## Writing Style
+## 文风要求
 
 {{writing_style}}
 
-## World Setting
+## 世界观设定
 
 {{worldview}}
 
 {{#map_data}}
-## Map & Locations
+## 地图与地点
 
 {{map_data}}
 {{/map_data}}
 
 {{#character_profiles}}
-## Character Profiles
+## 角色档案
 
 {{character_profiles}}
 {{/character_profiles}}
 
 ---
 
-Write the chapter content below. Aim for approximately 2000 words of compelling narrative prose that follows the summary and respects the established world setting and writing style. If no chapter title is provided, generate an appropriate title based on the content and output it as the first line prefixed with `# `.
+请写出约 2000 字的叙事正文，遵循摘要内容，贴合世界观和文风设定。如果没有提供章节标题，请根据正文内容生成一个合适的标题，并以 `# 标题` 格式输出为内容第一行。

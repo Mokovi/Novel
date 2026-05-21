@@ -1,82 +1,82 @@
 ---
-task_type: outline_design
-name: Arc Outline Design
+description: 根据事件描述和章节摘要，为故事事件（多个章节）生成大纲
 is_default: false
-version: 1.0
-description: Generate an outline for a story arc (multiple chapters) based on arc description and chapter summaries.
-required_variables:
-  - arc_title
-  - arc_description
-  - chapter_summaries
+name: 事件大纲设计
 optional_variables:
-  - worldview
-  - writing_style
-  - character_profiles
-  - volume_outline
-  - book_name
-  - book_description
-  - map_data
+- worldview
+- writing_style
+- character_profiles
+- volume_outline
+- book_name
+- book_description
+- map_data
+required_variables:
+- arc_title
+- arc_description
+- chapter_summaries
+task_type: outline_design
+version: '1'
 ---
 
-You are a novelist designing the outline for a story arc within a long-form novel. Follow the instructions below precisely.
+你是一位长篇小说作家，正在为故事中的事件设计大纲。请严格按照以下指令执行。
 
-## Arc Title
+## 事件标题
 
 {{arc_title}}
 
-## Arc Description
+## 事件描述
 
 {{arc_description}}
 
 {{#book_name}}
-## Book
-- Title: {{book_name}}
+## 作品
+- 标题：{{book_name}}
 {{#book_description}}
-- Description: {{book_description}}
+- 简介：{{book_description}}
 {{/book_description}}
 {{/book_name}}
 
 {{#writing_style}}
-## Writing Style
+## 文风要求
 
 {{writing_style}}
 {{/writing_style}}
 
 {{#worldview}}
-## World Setting
+## 世界观设定
 
 {{worldview}}
 {{/worldview}}
 
 {{#character_profiles}}
-## Character Profiles
+## 角色档案
 
 {{character_profiles}}
 {{/character_profiles}}
 
 {{#map_data}}
-## Map & Locations
+## 地图与地点
 
 {{map_data}}
 {{/map_data}}
 
 {{#volume_outline}}
-## Parent Volume Outline
+## 所属卷大纲
 
 {{volume_outline}}
 {{/volume_outline}}
 
-## Existing Chapter Summaries
+## 现有章节摘要
 
 {{chapter_summaries}}
 
 ---
 
-Based on the arc description and existing chapter summaries above, write a comprehensive arc outline. The outline should:
+根据以上事件描述和现有章节摘要，编写全面的事件大纲。大纲应：
 
-1. Describe the overall narrative arc and character development trajectory
-2. Identify key plot points and turning points
-3. Suggest how the existing chapters fit into the larger arc structure
-4. Provide guidance for writing future chapters in this arc
+1. 描述整体叙事弧线和角色发展轨迹
+2. 确定关键情节节点和转折点
+3. 说明现有章节如何融入更大的事件结构
+4. 为事件内后续章节的写作提供指导
 
-Write the outline in Chinese, targeting 500-1000 words. Only output the outline content, no additional explanation.
+用中文编写大纲，没有字数限制。只输出大纲内容，无需额外说明。

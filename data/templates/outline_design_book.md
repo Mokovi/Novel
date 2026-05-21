@@ -1,64 +1,64 @@
 ---
-task_type: outline_design
-name: Book Outline Design
+description: 根据卷及其大纲，为整本书生成顶层大纲
 is_default: false
-version: 1.0
-description: Generate a top-level outline for the entire book based on volumes and their outlines.
-required_variables:
-  - volume_outlines
-  - book_name
+name: 全书大纲设计
 optional_variables:
-  - worldview
-  - writing_style
-  - character_profiles
-  - book_description
-  - map_data
+- worldview
+- writing_style
+- character_profiles
+- book_description
+- map_data
+required_variables:
+- volume_outlines
+- book_name
+task_type: outline_design
+version: '1'
 ---
 
-You are a novelist designing the outline for an entire book. Follow the instructions below precisely.
+你是一位长篇小说作家，正在为整本书设计大纲。请严格按照以下指令执行。
 
-## Book Information
+## 作品信息
 
-- Title: {{book_name}}
+- 标题：{{book_name}}
 {{#book_description}}
-- Description: {{book_description}}
+- 简介：{{book_description}}
 {{/book_description}}
 
 {{#writing_style}}
-## Writing Style
+## 文风要求
 
 {{writing_style}}
 {{/writing_style}}
 
 {{#worldview}}
-## World Setting
+## 世界观设定
 
 {{worldview}}
 {{/worldview}}
 
 {{#character_profiles}}
-## Character Profiles
+## 角色档案
 
 {{character_profiles}}
 {{/character_profiles}}
 
 {{#map_data}}
-## Map & Locations
+## 地图与地点
 
 {{map_data}}
 {{/map_data}}
 
-## Volume Outlines
+## 卷大纲
 
 {{volume_outlines}}
 
 ---
 
-Based on the volume outlines above, write a comprehensive book-level outline. The outline should:
+根据以上卷大纲，编写全面的全书级大纲。大纲应：
 
-1. Describe the overarching narrative of the entire book
-2. Explain how each volume contributes to the larger story
-3. Identify the major story arcs that span multiple volumes
-4. Provide guidance for maintaining consistency across all volumes
+1. 描述整本书的总体叙事脉络
+2. 说明每一卷如何为更大的故事做出贡献
+3. 识别跨越多个卷的主要故事弧线
+4. 为保持各卷之间的一致性提供指导
 
-Write the outline in Chinese, targeting 800-1500 words. Only output the outline content, no additional explanation.
+用中文编写大纲，没有字数限制。只输出大纲内容，无需额外说明。
