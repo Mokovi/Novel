@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from typing import Literal
 
 from backend.config import load_config, save_config
 from backend.database import get_db
@@ -16,6 +17,7 @@ class GenerationSettings(BaseModel):
     previous_chapter_count: int = Field(1, ge=0, le=10)
     outline_generation_count: int = Field(1, ge=1, le=5)
     outline_injection_depth: int = Field(1, ge=0, le=3)
+    previous_context_mode: Literal["summary", "full_text"] = "summary"
 
 
 @router.get("/generation", response_model=GenerationSettings)
@@ -29,6 +31,7 @@ def get_generation_settings(
         previous_chapter_count=gen.get("previous_chapter_count", 1),
         outline_generation_count=gen.get("outline_generation_count", 1),
         outline_injection_depth=gen.get("outline_injection_depth", 1),
+        previous_context_mode=gen.get("previous_context_mode", "summary"),
     )
 
 
@@ -43,6 +46,7 @@ def update_generation_settings(
         "previous_chapter_count": body.previous_chapter_count,
         "outline_generation_count": body.outline_generation_count,
         "outline_injection_depth": body.outline_injection_depth,
+        "previous_context_mode": body.previous_context_mode,
     }
     save_config(cfg)
     return body

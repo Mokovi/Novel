@@ -176,6 +176,35 @@ def get_previous_chapter_summaries(
     return [s[0] for s in reversed(summaries)]
 
 
+def get_previous_chapter_contents(
+    db: Session, chapter_id: int, count: int
+) -> list[str]:
+    """Get full content from the previous *count* chapters (same volume, earlier sort_order).
+
+    Returns formatted strings: ``第N章「Title」\\n\\nContent``
+    """
+    chapter = db.get(Chapter, chapter_id)
+    if not chapter:
+        return []
+
+    rows = (
+        db.query(Chapter.title, Chapter.content)
+        .filter(
+            Chapter.volume_id == chapter.volume_id,
+            Chapter.sort_order < chapter.sort_order,
+            Chapter.content.isnot(None),
+            Chapter.content != "",
+        )
+        .order_by(Chapter.sort_order.desc())
+        .limit(count)
+        .all()
+    )
+    # Reverse to get chronological order
+    result = []
+    for i, (title, content) in enumerate(reversed(rows), 1):
+        result.append(f"第{i}章「{title or ''}」\n\n{content}")
+    return result
+
 
 def set_chapter_characters(db: Session, chapter_id: int, character_ids: list[int]) -> list:
     """Replace all character associations for a chapter. Returns the new list of characters."""

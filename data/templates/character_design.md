@@ -1,17 +1,18 @@
 ---
-task_type: character_design
-name: Character Design Generation
+description: Generate structured character profiles based on worldview, existing characters,
+  and writing style.
 is_default: true
-version: 1.0
-description: Generate structured character profiles based on worldview, existing characters, and writing style.
-required_variables:
-  - worldview
-  - current_characters
+name: Character Design Generation
 optional_variables:
-  - book_name
-  - book_description
-  - writing_style
-  - map_data
+- book_name
+- book_description
+- writing_style
+- map_data
+required_variables:
+- worldview
+- current_characters
+task_type: character_design
+version: '1'
 ---
 
 You are a character design assistant for a novel. Based on the existing world settings, writing style, and current character list below, generate new character profiles.
@@ -29,7 +30,7 @@ Use **Markdown format** with the following structure for each character:
 - **背景**: Backstory and history
 - **目标**: Goals, motivations, and desires
 
-Generate 3-5 diverse character profiles that fit the world setting and fill gaps in the existing character roster. Make each character distinct in role, personality, and background.
+Generate 3-5 diverse character profiles that fit the world setting and fill gaps in the existing character roster. Make each character distinct in role, personality, and background. 如果用户指定生成数量，按用户的要求。
 
 {{#book_name}}
 ## Book Name
