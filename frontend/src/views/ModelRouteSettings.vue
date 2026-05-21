@@ -1,19 +1,24 @@
 <template>
   <div class="settings-page">
-    <h1 class="page-title">设置</h1>
-    <p class="page-desc">管理模型 API、方案、功能绑定和生成参数。</p>
+    <div class="page-header">
+      <h1 class="page-title">设置</h1>
+      <p class="page-desc">管理模型 API、方案、功能绑定和生成参数。</p>
+    </div>
 
     <n-tabs v-model:value="activeTab" type="line">
       <!-- Tab 1: Model APIs -->
       <n-tab-pane name="apis" tab="模型 API">
         <div class="tab-content">
-          <n-button type="primary" @click="openApiCreate" class="add-btn">添加 API</n-button>
+          <SectionHeader title="模型 API">
+            <n-button type="primary" @click="openApiCreate" class="add-btn">添加 API</n-button>
+          </SectionHeader>
           <div class="card-list">
             <div
-              v-for="api in apis"
+              v-for="(api, i) in apis"
               :key="api.id"
-              class="api-card"
-              :class="{ disabled: !api.enabled }"
+              class="enhanced-card"
+              :class="[api.enabled ? 'card-accent-success' : 'card-accent-muted', { 'card-disabled': !api.enabled }]"
+              :style="{ animationDelay: i * 0.05 + 's' }"
             >
               <div class="card-header">
                 <div class="card-header-left">
@@ -23,12 +28,24 @@
                   </n-tag>
                 </div>
               </div>
-              <n-descriptions :column="2" size="small" bordered class="card-descriptions">
-                <n-descriptions-item label="提供商">{{ api.provider }}</n-descriptions-item>
-                <n-descriptions-item label="模型">{{ api.model_name }}</n-descriptions-item>
-                <n-descriptions-item label="API Key">{{ api.api_key_masked || '-' }}</n-descriptions-item>
-                <n-descriptions-item label="Base URL">{{ api.api_base_url || '(默认)' }}</n-descriptions-item>
-              </n-descriptions>
+              <div class="api-descs">
+                <div class="api-desc-item">
+                  <span class="api-desc-label">提供商</span>
+                  <span class="api-desc-value">{{ api.provider }}</span>
+                </div>
+                <div class="api-desc-item">
+                  <span class="api-desc-label">模型</span>
+                  <span class="api-desc-value">{{ api.model_name }}</span>
+                </div>
+                <div class="api-desc-item">
+                  <span class="api-desc-label">API Key</span>
+                  <span class="api-desc-value">{{ api.api_key_masked || '-' }}</span>
+                </div>
+                <div class="api-desc-item">
+                  <span class="api-desc-label">Base URL</span>
+                  <span class="api-desc-value">{{ api.api_base_url || '(默认)' }}</span>
+                </div>
+              </div>
               <div class="card-actions">
                 <n-button size="small" @click="openApiEdit(api)">编辑</n-button>
                 <n-button size="small" :loading="apiTesting === api.id" @click="testApiConnection(api.id)">测试</n-button>
@@ -51,20 +68,22 @@
       <!-- Tab 2: Plans -->
       <n-tab-pane name="plans" tab="方案管理">
         <div class="tab-content">
-          <n-button type="primary" @click="openPlanCreate" class="add-btn">添加方案</n-button>
+          <SectionHeader title="方案管理">
+            <n-button type="primary" @click="openPlanCreate" class="add-btn">添加方案</n-button>
+          </SectionHeader>
           <div class="card-list">
-            <div v-for="plan in plans" :key="plan.id" class="plan-card">
+            <div v-for="(plan, i) in plans" :key="plan.id" class="enhanced-card card-accent-gold" :style="{ animationDelay: i * 0.05 + 's' }">
               <div class="card-header">
                 <n-text class="card-title">{{ plan.name }}</n-text>
               </div>
               <p v-if="plan.description" class="plan-desc">{{ plan.description }}</p>
               <div class="plan-apis">
                 <div
-                  v-for="(api, i) in plan.apis"
+                  v-for="(api, idx) in plan.apis"
                   :key="api.id"
                   class="plan-api-item"
                 >
-                  <span class="plan-api-index">{{ i + 1 }}</span>
+                  <span class="plan-api-index">{{ idx + 1 }}</span>
                   <span class="plan-api-name">{{ api.name }} ({{ api.model_name }})</span>
                   <n-tag :type="api.enabled ? 'success' : 'default'" size="small">
                     {{ api.enabled ? '启用' : '禁用' }}
@@ -90,8 +109,9 @@
       <!-- Tab 3: Bindings -->
       <n-tab-pane name="bindings" tab="功能绑定">
         <div class="tab-content">
+          <SectionHeader title="功能绑定" />
           <div class="card-list">
-            <div v-for="key of taskKeys" :key="key" class="binding-card">
+            <div v-for="(key, i) of taskKeys" :key="key" class="enhanced-card card-accent-info" :style="{ animationDelay: i * 0.05 + 's' }">
               <div class="card-header">
                 <n-text class="card-title">{{ taskLabels[key] || key }}</n-text>
                 <n-tag size="small">{{ key }}</n-tag>
@@ -107,14 +127,16 @@
               <div v-if="getBindingPlanId(key)" class="binding-apis">
                 <n-text depth="3" class="binding-apis-label">绑定的方案中包含 API：</n-text>
                 <div class="binding-api-tags">
-                  <n-tag
-                    v-for="api in (plans.find(p => p.id === getBindingPlanId(key))?.apis || [])"
-                    :key="api.id"
-                    size="small"
-                    :type="api.enabled ? 'success' : 'default'"
-                  >
-                    {{ api.name }} ({{ api.model_name }})
-                  </n-tag>
+                  <template v-for="(api, idx) in (plans.find(p => p.id === getBindingPlanId(key))?.apis || [])" :key="api.id">
+                    <span class="binding-api-arrow" v-if="idx > 0" />
+                    <n-tag
+                      size="small"
+                      :type="api.enabled ? 'success' : 'default'"
+                      class="binding-api-tag"
+                    >
+                      {{ api.name }} ({{ api.model_name }})
+                    </n-tag>
+                  </template>
                 </div>
               </div>
             </div>
@@ -125,12 +147,13 @@
       <!-- Tab 4: Generation Settings -->
       <n-tab-pane name="generation" tab="生成设置">
         <div class="tab-content">
-          <n-card title="生成参数" class="settings-card">
-            <n-space vertical :size="16">
-              <n-form-item label="注入前文章节摘要数量">
-                <n-text depth="3" class="form-hint">
-                  下一章生成时，会在提示词中注入前 N 章的 AI 摘要作为上下文参考。
-                </n-text>
+          <SectionHeader title="生成参数" />
+          <div class="enhanced-card card-accent-gold gen-settings-card">
+            <div class="gen-setting-item">
+              <div class="gen-setting-number">1</div>
+              <div class="gen-setting-content">
+                <label class="gen-setting-label">注入前文章节摘要数量</label>
+                <p class="gen-setting-hint">下一章生成时，会在提示词中注入前 N 章的 AI 摘要作为上下文参考。</p>
                 <n-input-number
                   v-model:value="settingsStore.previousChapterCount"
                   :min="0"
@@ -138,11 +161,14 @@
                   :step="1"
                   style="width: 200px"
                 />
-              </n-form-item>
-              <n-form-item label="大纲生成轮数">
-                <n-text depth="3" class="form-hint">
-                  生成大纲时运行的推理轮数（1-5），轮数越多大纲越精细。
-                </n-text>
+              </div>
+            </div>
+            <div class="gen-setting-divider" />
+            <div class="gen-setting-item">
+              <div class="gen-setting-number">2</div>
+              <div class="gen-setting-content">
+                <label class="gen-setting-label">大纲生成轮数</label>
+                <p class="gen-setting-hint">生成大纲时运行的推理轮数（1-5），轮数越多大纲越精细。</p>
                 <n-input-number
                   v-model:value="settingsStore.outlineGenerationCount"
                   :min="1"
@@ -150,11 +176,14 @@
                   :step="1"
                   style="width: 200px"
                 />
-              </n-form-item>
-              <n-form-item label="上层大纲注入层级">
-                <n-text depth="3" class="form-hint">
-                  生成低层级纲要时，自动注入上层纲要内容。0=不注入，1=注入上一层（生成事件纲注入卷纲，生成章节注入事件纲）。
-                </n-text>
+              </div>
+            </div>
+            <div class="gen-setting-divider" />
+            <div class="gen-setting-item">
+              <div class="gen-setting-number">3</div>
+              <div class="gen-setting-content">
+                <label class="gen-setting-label">上层大纲注入层级</label>
+                <p class="gen-setting-hint">生成低层级纲要时，自动注入上层纲要内容。0=不注入，1=注入上一层（生成事件纲注入卷纲，生成章节注入事件纲）。</p>
                 <n-input-number
                   v-model:value="settingsStore.outlineInjectionDepth"
                   :min="0"
@@ -162,8 +191,9 @@
                   :step="1"
                   style="width: 200px"
                 />
-              </n-form-item>
-
+              </div>
+            </div>
+            <div class="gen-setting-footer">
               <n-button
                 type="primary"
                 :loading="settingsStore.loading"
@@ -171,8 +201,8 @@
               >
                 保存设置
               </n-button>
-            </n-space>
-          </n-card>
+            </div>
+          </div>
         </div>
       </n-tab-pane>
     </n-tabs>
@@ -244,6 +274,7 @@ import { listModelApis, createModelApi, updateModelApi, deleteModelApi, testMode
 import { listPlans, createPlan, updatePlan, deletePlan } from '../api/plans.js'
 import { listTaskBindings, updateTaskBinding, deleteTaskBinding } from '../api/task-bindings.js'
 import { useSettingsStore } from '../stores/settings.js'
+import SectionHeader from '../components/common/SectionHeader.vue'
 
 const message = useMessage()
 const settingsStore = useSettingsStore()
@@ -450,70 +481,142 @@ function getBindingPlanId(taskKey) {
   margin: 0 auto;
 }
 
+.page-header {
+  margin-bottom: 28px;
+}
+
 .page-title {
   font-family: var(--font-display);
   font-size: 28px;
   font-weight: 700;
   color: var(--color-text-primary);
   margin: 0 0 6px;
+  position: relative;
+}
+.page-title::after {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  margin-top: 6px;
 }
 
 .page-desc {
   font-size: 14px;
   color: var(--color-text-secondary);
-  margin: 0 0 24px;
+  margin: 8px 0 0;
 }
 
 .tab-content {
   animation: fade-in 0.3s ease;
 }
 
-.add-btn {
-  margin-bottom: 16px;
-}
-
-/* Card list */
-.card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* API Card */
-.api-card {
+/* ── Enhanced Cards ── */
+.enhanced-card {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  border-left: 3px solid var(--color-success);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--shadow-card-rest);
+  transition: var(--transition-card);
   animation: fade-in-up 0.35s ease both;
 }
+.enhanced-card:hover {
+  box-shadow: var(--shadow-card-lift);
+  transform: translateY(-2px);
+}
 
-.api-card.disabled {
-  border-left-color: var(--color-text-muted);
+.card-accent-gold { border-left: 3px solid var(--color-accent); }
+.card-accent-success { border-left: 3px solid var(--color-success); }
+.card-accent-info { border-left: 3px solid var(--color-info); }
+.card-accent-muted { border-left: 3px solid var(--color-text-muted); }
+
+.card-disabled {
   opacity: 0.75;
 }
 
-/* Plan Card */
-.plan-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  animation: fade-in-up 0.35s ease both;
+/* ── Card list ── */
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ── API descriptions grid ── */
+.api-descs {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+@media (min-width: 640px) {
+  .api-descs {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.api-desc-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--color-bg-page);
+  border-radius: 6px;
+}
+.api-desc-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.api-desc-value {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* ── Plan card ── */
 .plan-desc {
   font-size: 13px;
   color: var(--color-text-secondary);
-  margin: 4px 0 12px;
+  margin: 4px 0 16px;
 }
 
 .plan-apis {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .plan-api-item {
@@ -522,7 +625,7 @@ function getBindingPlanId(taskKey) {
   gap: 6px;
   background: var(--color-bg-page);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   padding: 6px 10px;
   font-size: 13px;
 }
@@ -545,17 +648,9 @@ function getBindingPlanId(taskKey) {
   color: var(--color-text-primary);
 }
 
-/* Binding Card */
-.binding-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  animation: fade-in-up 0.35s ease both;
-}
-
+/* ── Binding card ── */
 .binding-select {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .binding-select :deep(.n-form-item-label) {
@@ -563,67 +658,104 @@ function getBindingPlanId(taskKey) {
 }
 
 .binding-apis {
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .binding-apis-label {
   font-size: 12px;
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .binding-api-tags {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+}
+
+.binding-api-tag {
+  margin: 2px 0;
+}
+
+.binding-api-arrow {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 8px;
+  color: var(--color-text-muted);
+}
+.binding-api-arrow::after {
+  content: '→';
+  font-size: 14px;
+}
+
+/* ── Generation settings card ── */
+.gen-settings-card {
+  max-width: 600px;
+}
+
+.gen-setting-item {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.gen-setting-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.gen-setting-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
-/* Shared */
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.card-header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.card-title {
-  font-family: var(--font-display);
-  font-size: 16px;
+.gen-setting-label {
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-text-primary);
 }
 
-.card-descriptions {
-  margin-bottom: 12px;
+.gen-setting-hint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.5;
 }
 
-.card-actions {
+.gen-setting-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 20px 0;
+  margin-left: 44px;
+}
+
+.gen-setting-footer {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
+/* ── Shared ── */
 .btn-danger-text {
   color: var(--color-error) !important;
 }
 
 .empty-state {
   margin-top: 40px;
-}
-
-.settings-card {
-  max-width: 500px;
-}
-
-.form-hint {
-  display: block;
-  margin-bottom: 6px;
 }
 </style>

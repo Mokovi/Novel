@@ -67,6 +67,8 @@ export const lightThemeOverrides = {
     borderColor: '#e8e0d5',
     actionColor: '#faf5ed',
     borderRadiusSmall: '8px',
+    borderRadiusMedium: '10px',
+    paddingMedium: '20px 24px',
   },
   Button: {
     color: '#ffffff',
@@ -102,7 +104,7 @@ export const lightThemeOverrides = {
     colorError: '#fce8e8',
     colorInfo: '#e4edf5',
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: '6px',
   },
   Input: {
     color: '#ffffff',

@@ -53,4 +53,11 @@
   --transition-fast: 0.15s ease;
   --transition-base: 0.25s ease;
   --transition-slow: 0.4s ease;
+
+  /* ── Enhanced Card Tokens ── */
+  --color-accent-glow: rgba(201, 169, 78, 0.15);
+  --shadow-card-rest: 0 1px 4px rgba(26, 22, 20, 0.06);
+  --shadow-card-lift: 0 6px 20px rgba(26, 22, 20, 0.1);
+  --transition-card: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --gradient-card-header: linear-gradient(to right, rgba(201, 169, 78, 0.05), transparent);
 }

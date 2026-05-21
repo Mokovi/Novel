@@ -6,7 +6,9 @@
       <div class="header-actions">
         <n-button size="small" quaternary @click="handleRefresh">
           <template #icon>
-            <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></n-icon>
+            <n-icon>
+              <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </n-icon>
           </template>
           刷新
         </n-button>
@@ -19,7 +21,7 @@
       <n-tab-pane name="book" tab="书籍变量">
         <div v-if="loading" class="loading-center"><n-spin size="medium" /></div>
         <div v-else class="variable-list">
-          <div v-for="v in bookVariables" :key="v.name" class="variable-card">
+          <div v-for="v in bookVariables" :key="v.name" class="enhanced-card card-accent-gold">
             <div class="card-header">
               <span class="var-label">{{ v.label }}</span>
               <span class="var-name-tag">{{ v.name }}</span>
@@ -37,9 +39,7 @@
                   <button class="mode-btn" :class="{ active: !previewStates[v.name] }" @click="previewStates[v.name] = false">编辑</button>
                 </div>
                 <div v-if="previewStates[v.name]" class="preview-wrapper">
-                  <button class="copy-btn" @click="copyText(editValues[v.name])" title="复制内容">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                  </button>
+                  <CopyButton :text="editValues[v.name]" />
                   <div class="markdown-preview" v-html="renderMarkdown(editValues[v.name])" />
                 </div>
                 <textarea v-else v-model="editValues[v.name]" class="markdown-textarea" :placeholder="'输入' + v.label + '（支持 Markdown 格式）'" />
@@ -59,183 +59,145 @@
       <!-- ═══ 世界观 ═══ -->
       <n-tab-pane name="worldview" tab="世界观">
         <div class="worldview-section">
-          <div class="section-header">
-            <h3>世界观设定 <span class="var-name-tag" style="margin-left:8px">worldview</span></h3>
-            <div class="header-actions">
-              <n-button size="small" quaternary @click="handleRefreshWorldview">
-                <template #icon>
-                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></n-icon>
-                </template>
-              </n-button>
-              <n-button size="small" @click="prepareGenerateWorldview">
-                <template #icon>
-                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" fill="none"/></svg></n-icon>
-                </template>
-                AI 生成设定
-              </n-button>
-              <n-button size="small" type="primary" :loading="worldviewSaving" @click="handleSaveWorldview">保存</n-button>
-            </div>
-          </div>
+          <SectionHeader title="世界观设定" tag="worldview">
+            <n-button size="small" quaternary @click="handleRefreshWorldview">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </n-icon>
+              </template>
+            </n-button>
+            <n-button size="small" @click="worldviewGen.prepare()">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+                </n-icon>
+              </template>
+              AI 生成设定
+            </n-button>
+            <n-button size="small" type="primary" :loading="worldviewSaving" @click="handleSaveWorldview">保存</n-button>
+          </SectionHeader>
+
           <div class="editor-mode-bar">
             <button class="mode-btn" :class="{ active: worldviewPreview }" @click="worldviewPreview = true">预览</button>
             <button class="mode-btn" :class="{ active: !worldviewPreview }" @click="worldviewPreview = false">编辑</button>
           </div>
           <template v-if="worldviewPreview">
-            <div class="preview-wrapper">
-              <button class="copy-btn" @click="copyText(worldviewText)" title="复制内容">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
+            <div class="preview-wrapper full-width-preview">
+              <CopyButton :text="worldviewText" />
               <div class="markdown-preview" v-html="renderMarkdown(worldviewText)" />
             </div>
           </template>
           <textarea v-else v-model="worldviewText" class="markdown-textarea worldview-textarea" placeholder="在此输入世界观设定（支持 Markdown 格式）&#10;&#10;可以使用 ## 标题、- 列表、**加粗** 等格式" />
-        </div>
 
-        <!-- ═══ SSE Generation Modal ═══ -->
-        <n-modal v-model:show="showGenModal" :mask-closable="false" style="width: 720px">
-          <n-card title="AI 生成世界观设定" style="max-height: 80vh; overflow-y: auto; border-radius: 12px">
-            <div v-if="genPhase === 'idle'">
-              <PromptInjectionPanel
-                title="AI 生成世界观设定"
-                :injection-items="injectionItems"
-                :book-id="bookId"
-                :loading="genRunning"
-                gen-type="worldview"
-                @start="startWorldviewGen"
-                @cancel="showGenModal = false"
-              />
-            </div>
-            <div v-if="genPhase !== 'idle'" class="gen-output">
-              <p v-if="genModel" class="gen-meta">模型: {{ genModel }} | 预估: {{ genTokens }} tokens</p>
-              <div v-if="genPhase === 'generating'" class="gen-text">{{ genOutput }}</div>
-              <div v-else class="preview-wrapper">
-                <button class="copy-btn" @click="copyText(genOutput)" title="复制内容">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                </button>
-                <div class="markdown-body" v-html="renderMarkdown(genOutput)" />
-              </div>
-              <n-spin v-if="genRunning" size="small" />
-            </div>
-            <template #action>
-              <n-space justify="end">
-                <template v-if="genPhase === 'generating'">
-                  <n-button @click="cancelGeneration">取消</n-button>
-                </template>
-                <template v-else-if="genPhase === 'done'">
-                  <n-button type="primary" @click="closeGenModal">关闭</n-button>
-                </template>
-              </n-space>
-            </template>
-          </n-card>
-        </n-modal>
+          <GenModal
+            title="AI 生成世界观设定"
+            gen-type="worldview"
+            :visible="worldviewGen.visible.value"
+            :phase="worldviewGen.phase.value"
+            :output="worldviewGen.output.value"
+            :model="worldviewGen.model.value"
+            :tokens="worldviewGen.tokens.value"
+            :running="worldviewGen.running.value"
+            :injection-items="worldviewGen.injectionItems.value"
+            :book-id="bookId"
+            @start="worldviewGen.start"
+            @cancel="worldviewGen.cancel()"
+            @close="worldviewGen.close()"
+          />
+        </div>
       </n-tab-pane>
 
       <!-- ═══ 地图 ═══ -->
       <n-tab-pane name="map" tab="地图">
         <div class="worldview-section">
-          <div class="section-header">
-            <h3>地图设定 <span class="var-name-tag" style="margin-left:8px">map_data</span></h3>
-            <div class="header-actions">
-              <n-button size="small" quaternary @click="handleRefreshMap">
-                <template #icon>
-                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></n-icon>
-                </template>
-              </n-button>
-              <n-button size="small" @click="prepareGenerateMap">
-                <template #icon>
-                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" fill="none"/></svg></n-icon>
-                </template>
-                AI 生成设定
-              </n-button>
-              <n-button size="small" type="primary" :loading="mapSaving" @click="handleSaveMap">保存</n-button>
-            </div>
-          </div>
+          <SectionHeader title="地图设定" tag="map_data">
+            <n-button size="small" quaternary @click="handleRefreshMap">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </n-icon>
+              </template>
+            </n-button>
+            <n-button size="small" @click="mapGen.prepare()">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+                </n-icon>
+              </template>
+              AI 生成设定
+            </n-button>
+            <n-button size="small" type="primary" :loading="mapSaving" @click="handleSaveMap">保存</n-button>
+          </SectionHeader>
+
           <div class="editor-mode-bar">
             <button class="mode-btn" :class="{ active: mapPreview }" @click="mapPreview = true">预览</button>
             <button class="mode-btn" :class="{ active: !mapPreview }" @click="mapPreview = false">编辑</button>
           </div>
           <template v-if="mapPreview">
-            <div class="preview-wrapper">
-              <button class="copy-btn" @click="copyText(mapText)" title="复制内容">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
+            <div class="preview-wrapper full-width-preview">
+              <CopyButton :text="mapText" />
               <div class="markdown-preview" v-html="renderMarkdown(mapText)" />
             </div>
           </template>
           <textarea v-else v-model="mapText" class="markdown-textarea worldview-textarea" placeholder="在此输入地图设定（支持 Markdown 格式）&#10;&#10;可以使用 ## 标题、- 列表、**加粗** 等格式" />
-        </div>
 
-        <!-- ═══ SSE Generation Modal ═══ -->
-        <n-modal v-model:show="showMapGenModal" :mask-closable="false" style="width: 720px">
-          <n-card title="AI 生成地图设定" style="max-height: 80vh; overflow-y: auto; border-radius: 12px">
-            <div v-if="mapGenPhase === 'idle'">
-              <PromptInjectionPanel
-                title="AI 生成地图设定"
-                :injection-items="mapInjectionItems"
-                :book-id="bookId"
-                :loading="mapGenRunning"
-                gen-type="map"
-                @start="startMapGen"
-                @cancel="showMapGenModal = false"
-              />
-            </div>
-            <div v-if="mapGenPhase !== 'idle'" class="gen-output">
-              <p v-if="mapGenModel" class="gen-meta">模型: {{ mapGenModel }} | 预估: {{ mapGenTokens }} tokens</p>
-              <div v-if="mapGenPhase === 'generating'" class="gen-text">{{ mapGenOutput }}</div>
-              <div v-else class="preview-wrapper">
-                <button class="copy-btn" @click="copyText(mapGenOutput)" title="复制内容">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                </button>
-                <div class="markdown-body" v-html="renderMarkdown(mapGenOutput)" />
-              </div>
-              <n-spin v-if="mapGenRunning" size="small" />
-            </div>
-            <template #action>
-              <n-space justify="end">
-                <template v-if="mapGenPhase === 'generating'">
-                  <n-button @click="cancelMapGeneration">取消</n-button>
-                </template>
-                <template v-else-if="mapGenPhase === 'done'">
-                  <n-button type="primary" @click="closeMapGenModal">关闭</n-button>
-                </template>
-              </n-space>
-            </template>
-          </n-card>
-        </n-modal>
+          <GenModal
+            title="AI 生成地图设定"
+            gen-type="map"
+            :visible="mapGen.visible.value"
+            :phase="mapGen.phase.value"
+            :output="mapGen.output.value"
+            :model="mapGen.model.value"
+            :tokens="mapGen.tokens.value"
+            :running="mapGen.running.value"
+            :injection-items="mapGen.injectionItems.value"
+            :book-id="bookId"
+            @start="mapGen.start"
+            @cancel="mapGen.cancel()"
+            @close="mapGen.close()"
+          />
+        </div>
       </n-tab-pane>
 
       <!-- ═══ 人物 ═══ -->
       <n-tab-pane name="characters" tab="人物">
         <div class="character-section">
-          <div class="section-header">
-            <h3>人物管理 <span class="var-name-tag" style="margin-left:8px">character_profiles</span></h3>
-            <div class="header-actions">
-              <n-button size="small" quaternary @click="handleExportCharacters">
-                <template #icon>
-                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></n-icon>
-                </template>
-                导出
-              </n-button>
-              <n-button size="small" quaternary @click="handleImportClick">
-                <template #icon>
-                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></n-icon>
-                </template>
-                导入
-              </n-button>
-              <n-button size="small" @click="prepareGenerateCharacters">
-                <template #icon>
-                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" fill="none"/></svg></n-icon>
-                </template>
-                AI 生成人物
-              </n-button>
-              <n-button type="primary" size="small" @click="showCreateChar = true">
-                <template #icon>
-                  <n-icon><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></n-icon>
-                </template>
-                新建人物
-              </n-button>
-            </div>
-          </div>
+          <SectionHeader title="人物管理" tag="character_profiles">
+            <n-button size="small" quaternary @click="handleExportCharacters">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </n-icon>
+              </template>
+              导出
+            </n-button>
+            <n-button size="small" quaternary @click="handleImportClick">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </n-icon>
+              </template>
+              导入
+            </n-button>
+            <n-button size="small" @click="charGen.prepare()">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+                </n-icon>
+              </template>
+              AI 生成人物
+            </n-button>
+            <n-button type="primary" size="small" @click="showCreateChar = true">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </n-icon>
+              </template>
+              新建人物
+            </n-button>
+          </SectionHeader>
+
           <div class="filter-bar">
             <n-radio-group v-model:value="charRoleFilter" size="small" @update:value="fetchCharacters">
               <n-radio-button value="">全部</n-radio-button>
@@ -248,7 +210,7 @@
           <div v-if="charLoading" class="loading-center"><n-spin size="medium" /></div>
           <n-empty v-else-if="characters.length === 0" description="暂无人物，点击「新建人物」开始创建" class="empty-state" />
           <div v-else class="card-grid">
-            <n-card v-for="c in characters" :key="c.id" class="character-card" hoverable size="small" @click="openCharDetail(c.id)">
+            <n-card v-for="c in characters" :key="c.id" class="enhanced-card character-card" hoverable size="small" @click="openCharDetail(c.id)">
               <div class="card-content">
                 <div class="card-top">
                   <span class="character-name">{{ c.name }}</span>
@@ -265,48 +227,27 @@
               </div>
             </n-card>
           </div>
+
           <!-- Create character modal -->
           <n-modal v-model:show="showCreateChar" preset="card" title="新建人物" style="width: 520px" segmented>
             <CharacterForm :book-id="bookId" @saved="onCharCreated" @cancel="showCreateChar = false" />
           </n-modal>
 
-          <!-- ═══ Character SSE Generation Modal ═══ -->
-          <n-modal v-model:show="showCharGenModal" :mask-closable="false" style="width: 720px">
-            <n-card title="AI 生成人物" style="max-height: 80vh; overflow-y: auto; border-radius: 12px">
-              <div v-if="charGenPhase === 'idle'">
-                <PromptInjectionPanel
-                  title="AI 生成人物"
-                  :injection-items="charInjectionItems"
-                  :book-id="bookId"
-                  :loading="charGenRunning"
-                  gen-type="character"
-                  @start="startCharGen"
-                  @cancel="showCharGenModal = false"
-                />
-              </div>
-              <div v-if="charGenPhase !== 'idle'" class="gen-output">
-                <p v-if="charGenModel" class="gen-meta">模型: {{ charGenModel }} | 预估: {{ charGenTokens }} tokens</p>
-                <div v-if="charGenPhase === 'generating'" class="gen-text">{{ charGenOutput }}</div>
-                <div v-else class="preview-wrapper">
-                  <button class="copy-btn" @click="copyText(charGenOutput)" title="复制内容">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                  </button>
-                  <div class="markdown-body" v-html="renderMarkdown(charGenOutput)" />
-                </div>
-                <n-spin v-if="charGenRunning" size="small" />
-              </div>
-              <template #action>
-                <n-space justify="end">
-                  <template v-if="charGenPhase === 'generating'">
-                    <n-button @click="cancelCharGeneration">取消</n-button>
-                  </template>
-                  <template v-else-if="charGenPhase === 'done'">
-                    <n-button type="primary" @click="closeCharGenModal">关闭</n-button>
-                  </template>
-                </n-space>
-              </template>
-            </n-card>
-          </n-modal>
+          <GenModal
+            title="AI 生成人物"
+            gen-type="character"
+            :visible="charGen.visible.value"
+            :phase="charGen.phase.value"
+            :output="charGen.output.value"
+            :model="charGen.model.value"
+            :tokens="charGen.tokens.value"
+            :running="charGen.running.value"
+            :injection-items="charGen.injectionItems.value"
+            :book-id="bookId"
+            @start="charGen.start"
+            @cancel="charGen.cancel()"
+            @close="charGen.close()"
+          />
         </div>
       </n-tab-pane>
 
@@ -314,7 +255,7 @@
       <n-tab-pane name="context" tab="上下文变量">
         <div v-if="loading" class="loading-center"><n-spin size="medium" /></div>
         <div v-else class="variable-list">
-          <div v-for="v in contextVariables" :key="v.name" class="variable-card">
+          <div v-for="v in contextVariables" :key="v.name" class="enhanced-card card-accent-muted">
             <div class="card-header">
               <span class="var-label">{{ v.label }}</span>
               <span class="var-name-tag readonly">{{ v.name }}</span>
@@ -330,7 +271,7 @@
       <n-tab-pane name="derived" tab="衍生变量">
         <div v-if="loading" class="loading-center"><n-spin size="medium" /></div>
         <div v-else class="variable-list">
-          <div v-for="v in derivedVariables" :key="v.name" class="variable-card">
+          <div v-for="v in derivedVariables" :key="v.name" class="enhanced-card card-accent-muted">
             <div class="card-header">
               <span class="var-label">{{ v.label }}</span>
               <span class="var-name-tag readonly">{{ v.name }}</span>
@@ -355,28 +296,14 @@ import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateB
 import { listCharacters, importCharacters } from '../api/characters.js'
 import { generateWorldview, fetchWorldviewInjections, generateMap, fetchMapInjections, generateCharacters, fetchCharacterInjections } from '../api/generate.js'
 import CharacterForm from '../components/character/CharacterForm.vue'
-import PromptInjectionPanel from '../components/generate/PromptInjectionPanel.vue'
+import SectionHeader from '../components/common/SectionHeader.vue'
+import CopyButton from '../components/common/CopyButton.vue'
+import GenModal from '../components/generate/GenModal.vue'
+import { useSSEGeneration } from '../composables/useSSEGeneration.js'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
-
-function copyText(text) {
-  if (!text) return
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.select()
-  try {
-    document.execCommand('copy')
-    message.success('已复制')
-  } catch {
-    message.warning('复制失败')
-  }
-  document.body.removeChild(textarea)
-}
 
 const bookId = computed(() => Number(route.params.bookId))
 
@@ -410,41 +337,42 @@ const charLoading = ref(false)
 const charRoleFilter = ref('')
 const showCreateChar = ref(false)
 
-// ── Character generation state ──
-const showCharGenModal = ref(false)
-const charGenOutput = ref('')
-const charGenModel = ref('')
-const charGenTokens = ref(0)
-const charGenRunning = ref(false)
-const charGenAbort = ref(null)
-const charGenPhase = ref('idle') // 'idle' | 'generating' | 'done'
-const charInjectionItems = ref([])
-
 // ── Map tab state ──
 const mapText = ref('')
 const mapPreview = ref(true)
 const mapSaving = ref(false)
 const mapLoaded = ref(false)
 
-// ── Map generation state ──
-const showMapGenModal = ref(false)
-const mapGenOutput = ref('')
-const mapGenModel = ref('')
-const mapGenTokens = ref(0)
-const mapGenRunning = ref(false)
-const mapGenAbort = ref(null)
-const mapGenPhase = ref('idle') // 'idle' | 'generating' | 'done'
-const mapInjectionItems = ref([])
+// ── SSE Generation composables ──
+const worldviewGen = useSSEGeneration({
+  genType: 'worldview',
+  bookId,
+  fetchInjectionsFn: fetchWorldviewInjections,
+  generateFn: generateWorldview,
+  onReload: () => {
+    worldviewLoaded.value = false
+    loadWorldview()
+  },
+})
 
-// ── Worldview generation state ──
-const showGenModal = ref(false)
-const genOutput = ref('')
-const genModel = ref('')
-const genTokens = ref(0)
-const genRunning = ref(false)
-const genAbort = ref(null)
-const genPhase = ref('idle') // 'idle' | 'generating' | 'done'
-const injectionItems = ref([])
+const mapGen = useSSEGeneration({
+  genType: 'map',
+  bookId,
+  fetchInjectionsFn: fetchMapInjections,
+  generateFn: generateMap,
+  onReload: () => {
+    mapLoaded.value = false
+    loadMap()
+  },
+})
+
+const charGen = useSSEGeneration({
+  genType: 'character',
+  bookId,
+  fetchInjectionsFn: fetchCharacterInjections,
+  generateFn: generateCharacters,
+  onReload: fetchCharacters,
+})
 
 // ── Helpers ──
 function renderMarkdown(text) {
@@ -584,128 +512,10 @@ async function handleSaveMap() {
   } finally { mapSaving.value = false }
 }
 
-// ── Worldview generation handlers ──
-async function prepareGenerateWorldview() {
-  genOutput.value = ''
-  genModel.value = ''
-  genTokens.value = 0
-  genRunning.value = false
-  genPhase.value = 'idle'
-  injectionItems.value = []
-  showGenModal.value = true
-  try {
-    const data = await fetchWorldviewInjections(bookId.value)
-    injectionItems.value = data.items || []
-  } catch (e) {
-    console.error('Failed to fetch injection items:', e)
-  }
-}
-
-function startWorldviewGen(overrides, userPrompt) {
-  genPhase.value = 'generating'
-  genRunning.value = true
-
-  const body = { user_prompt: userPrompt || '' }
-  if (overrides && (overrides.exclude_variables?.length || overrides.extra_variables || overrides.added_character_ids?.length)) {
-    body.injection_overrides = overrides
-  }
-
-  genAbort.value = generateWorldview(bookId.value, {
-    onStart: (evt) => {
-      genModel.value = evt.model || ''
-      genTokens.value = evt.token_estimate || 0
-    },
-    onToken: (token) => {
-      genOutput.value += token
-    },
-    onDone: () => {
-      genRunning.value = false
-      genPhase.value = 'done'
-      message.success('世界观设定生成完成')
-    },
-    onError: (err) => {
-      genRunning.value = false
-      genPhase.value = 'done'
-      message.error(err)
-    },
-  }, body)
-}
-
-function cancelGeneration() {
-  genAbort.value?.abort()
-  genRunning.value = false
-  genPhase.value = 'idle'
-  message.info('已取消生成')
-}
-
-function closeGenModal() {
-  showGenModal.value = false
-  loadWorldview()
-}
-
 async function handleRefreshWorldview() {
   worldviewLoaded.value = false
   await loadWorldview()
   message.success('已刷新')
-}
-
-// ── Map generation handlers ──
-async function prepareGenerateMap() {
-  mapGenOutput.value = ''
-  mapGenModel.value = ''
-  mapGenTokens.value = 0
-  mapGenRunning.value = false
-  mapGenPhase.value = 'idle'
-  mapInjectionItems.value = []
-  showMapGenModal.value = true
-  try {
-    const data = await fetchMapInjections(bookId.value)
-    mapInjectionItems.value = data.items || []
-  } catch (e) {
-    console.error('Failed to fetch map injection items:', e)
-  }
-}
-
-function startMapGen(overrides, userPrompt) {
-  mapGenPhase.value = 'generating'
-  mapGenRunning.value = true
-
-  const body = { user_prompt: userPrompt || '' }
-  if (overrides && (overrides.exclude_variables?.length || overrides.extra_variables || overrides.added_character_ids?.length)) {
-    body.injection_overrides = overrides
-  }
-
-  mapGenAbort.value = generateMap(bookId.value, {
-    onStart: (evt) => {
-      mapGenModel.value = evt.model || ''
-      mapGenTokens.value = evt.token_estimate || 0
-    },
-    onToken: (token) => {
-      mapGenOutput.value += token
-    },
-    onDone: () => {
-      mapGenRunning.value = false
-      mapGenPhase.value = 'done'
-      message.success('地图设定生成完成')
-    },
-    onError: (err) => {
-      mapGenRunning.value = false
-      mapGenPhase.value = 'done'
-      message.error(err)
-    },
-  }, body)
-}
-
-function cancelMapGeneration() {
-  mapGenAbort.value?.abort()
-  mapGenRunning.value = false
-  mapGenPhase.value = 'idle'
-  message.info('已取消生成')
-}
-
-function closeMapGenModal() {
-  showMapGenModal.value = false
-  loadMap()
 }
 
 async function handleRefreshMap() {
@@ -715,7 +525,6 @@ async function handleRefreshMap() {
 }
 
 // ── Character import/export handlers ──
-
 async function handleExportCharacters() {
   const data = characters.value.map(c => ({
     name: c.name,
@@ -733,7 +542,6 @@ async function handleExportCharacters() {
     { type: 'application/json' },
   )
 
-  // Use File System Access API if available (native "Save As" dialog)
   if ('showSaveFilePicker' in window) {
     try {
       const handle = await window.showSaveFilePicker({
@@ -746,14 +554,11 @@ async function handleExportCharacters() {
       message.success('导出成功')
       return
     } catch (err) {
-      // User cancelled the save dialog — do nothing
       if (err.name === 'AbortError' || err.name === 'SecurityError') return
-      // Fall through to fallback on other errors
       console.warn('showSaveFilePicker failed, falling back to download:', err)
     }
   }
 
-  // Fallback: traditional browser download
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -798,66 +603,6 @@ async function handleFileSelected(e) {
   }
 }
 
-// ── Character generation handlers ──
-
-async function prepareGenerateCharacters() {
-  charGenOutput.value = ''
-  charGenModel.value = ''
-  charGenTokens.value = 0
-  charGenRunning.value = false
-  charGenPhase.value = 'idle'
-  charInjectionItems.value = []
-  showCharGenModal.value = true
-  try {
-    const data = await fetchCharacterInjections(bookId.value)
-    charInjectionItems.value = data.items || []
-  } catch (e) {
-    console.error('Failed to fetch character injection items:', e)
-  }
-}
-
-function startCharGen(overrides, userPrompt) {
-  charGenPhase.value = 'generating'
-  charGenRunning.value = true
-
-  const body = { user_prompt: userPrompt || '' }
-  if (overrides && (overrides.exclude_variables?.length || overrides.extra_variables || overrides.added_character_ids?.length)) {
-    body.injection_overrides = overrides
-  }
-
-  charGenAbort.value = generateCharacters(bookId.value, {
-    onStart: (evt) => {
-      charGenModel.value = evt.model || ''
-      charGenTokens.value = evt.token_estimate || 0
-    },
-    onToken: (token) => {
-      charGenOutput.value += token
-    },
-    onDone: () => {
-      charGenRunning.value = false
-      charGenPhase.value = 'done'
-      message.success('人物生成完成')
-    },
-    onError: (err) => {
-      charGenRunning.value = false
-      charGenPhase.value = 'done'
-      message.error(err)
-    },
-  }, body)
-}
-
-function cancelCharGeneration() {
-  charGenAbort.value?.abort()
-  charGenRunning.value = false
-  charGenPhase.value = 'idle'
-  message.info('已取消生成')
-}
-
-function closeCharGenModal() {
-  showCharGenModal.value = false
-  fetchCharacters()
-}
-
 async function handleRefresh() {
   await loadVariables()
   worldviewLoaded.value = false
@@ -878,29 +623,48 @@ onMounted(() => {
 
 <style scoped>
 .prompt-variables { max-width: 960px; margin: 0 auto; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.page-header h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--color-text); }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+.page-header h2 { margin: 0; font-family: var(--font-display); font-size: 28px; font-weight: 700; color: var(--color-text-primary); position: relative; }
+.page-header h2::after { content: ''; display: block; width: 40px; height: 3px; border-radius: 2px; background: var(--color-accent); margin-top: 6px; }
 .header-actions { display: flex; gap: 8px; }
 .loading-center { display: flex; justify-content: center; align-items: center; min-height: 200px; }
 
-/* ── Variable cards ── */
-.variable-list { display: flex; flex-direction: column; gap: 16px; }
-.variable-card {
+/* ── Enhanced Cards ── */
+.enhanced-card {
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--color-bg-card);
-  padding: 16px 20px;
+  padding: 24px;
+  box-shadow: var(--shadow-card-rest);
+  transition: var(--transition-card);
+  animation: fade-in-up 0.35s ease both;
 }
+.enhanced-card:hover {
+  box-shadow: var(--shadow-card-lift);
+  transform: translateY(-2px);
+}
+.enhanced-card:nth-child(2) { animation-delay: 0.05s; }
+.enhanced-card:nth-child(3) { animation-delay: 0.1s; }
+.enhanced-card:nth-child(4) { animation-delay: 0.15s; }
+.enhanced-card:nth-child(5) { animation-delay: 0.2s; }
+.enhanced-card:nth-child(6) { animation-delay: 0.25s; }
+
+.card-accent-gold { border-left: 3px solid var(--color-accent); }
+.card-accent-success { border-left: 3px solid var(--color-success); }
+.card-accent-muted { border-left: 3px solid var(--color-text-muted); }
+.card-accent-info { border-left: 3px solid var(--color-info); }
+
+.variable-list { display: flex; flex-direction: column; gap: 20px; }
 .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.var-label { font-size: 15px; font-weight: 600; color: var(--color-text); }
+.var-label { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
 .var-name-tag {
-  font-size: 11px; padding: 1px 8px; border-radius: 4px;
+  font-size: 11px; padding: 2px 8px; border-radius: 4px;
   background: #e8e6e1; color: #666;
   font-family: var(--font-mono, monospace);
 }
 .var-name-tag.readonly { background: #f0f0ee; color: #999; }
 .card-body { min-height: 32px; }
-.card-actions { display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee; }
+.card-actions { display: flex; justify-content: flex-end; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border); }
 .readonly-value { padding: 8px 0; }
 .help-text { font-size: 13px; line-height: 1.6; }
 .json-error {
@@ -911,16 +675,16 @@ onMounted(() => {
 /* ── Markdown editor ── */
 .markdown-textarea {
   width: 100%; min-height: 200px; padding: 16px;
-  border: 1px solid var(--color-border); border-radius: 6px;
+  border: 1px solid var(--color-border); border-radius: 8px;
   font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
-  font-size: 14px; line-height: 1.8; color: var(--color-text);
+  font-size: 14px; line-height: 1.8; color: var(--color-text-primary);
   background: var(--color-bg-editor); resize: vertical; outline: none; box-sizing: border-box;
 }
 .markdown-textarea:focus { border-color: var(--color-accent); box-shadow: 0 0 0 2px rgba(201, 169, 78, 0.12); }
 .markdown-textarea::placeholder { color: var(--color-text-muted); opacity: 0.5; }
 .worldview-textarea { min-height: 500px; }
 .editor-mode-bar {
-  display: flex; gap: 0; margin-bottom: 12px;
+  display: flex; gap: 0; margin-bottom: 16px;
   border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden; align-self: flex-start;
 }
 .mode-btn {
@@ -930,58 +694,34 @@ onMounted(() => {
 .mode-btn.active { background: var(--color-accent); color: #fff; }
 .mode-btn:not(.active):hover { background: var(--color-bg-hover, #f0f0f0); }
 .markdown-preview {
-  min-height: 200px; padding: 16px; border: 1px solid var(--color-border);
-  border-radius: 6px; background: #fafaf8; font-size: 14px; line-height: 1.8;
-  color: var(--color-text); overflow-y: auto;
+  min-height: 200px; padding: 20px; border: 1px solid var(--color-border);
+  border-radius: 8px; background: #fafaf8; font-size: 14px; line-height: 1.8;
+  color: var(--color-text-primary); overflow-y: auto;
 }
 
-/* ── Copy button ── */
+/* ── Preview wrapper (hosts CopyButton) ── */
 .preview-wrapper {
   position: relative;
 }
-.preview-wrapper .copy-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--color-border-light);
-  border-radius: 6px;
-  background: rgba(255,255,255,0.9);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.preview-wrapper:hover .copy-btn {
-  opacity: 1;
-}
-.preview-wrapper .copy-btn:hover {
-  background: #fff;
-  color: var(--color-accent);
-  border-color: var(--color-accent);
+.full-width-preview {
+  position: relative;
+  margin-bottom: 20px;
 }
 
 /* ── Worldview section ── */
 .worldview-section { min-height: 400px; }
-.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.section-header h3 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--color-text); }
 
 /* ── Character section ── */
 .character-section { min-height: 400px; }
-.filter-bar { margin-bottom: 16px; }
-.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-.character-card { cursor: pointer; }
+.filter-bar { margin-bottom: 20px; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+.character-card { cursor: pointer; border-left: 3px solid var(--color-accent); }
 .card-content { display: flex; flex-direction: column; gap: 6px; }
 .card-top { display: flex; justify-content: space-between; align-items: center; }
-.character-name { font-size: 16px; font-weight: 600; color: var(--color-text); }
-.card-aliases { font-size: 12px; color: var(--color-text-muted, #999); }
+.character-name { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
+.card-aliases { font-size: 12px; color: var(--color-text-muted); }
 .card-desc { font-size: 13px; color: #666; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.5; }
 .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
-.card-time { font-size: 11px; color: var(--color-text-muted, #999); }
+.card-time { font-size: 11px; color: var(--color-text-muted); }
 .empty-state { min-height: 200px; display: flex; align-items: center; justify-content: center; }
 </style>
