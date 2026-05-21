@@ -60,13 +60,19 @@ def update_character(
 
 
 def bulk_create_characters(
-    db: Session, characters_data: list[dict], book_id: int
+    db: Session, characters_data: list[dict], book_id: int, overwrite: bool = False
 ) -> dict:
     """Create multiple characters in bulk, accumulating errors without interrupting.
 
-    Returns ``{created_count, skipped_count, errors}``.
+    When ``overwrite=True``, existing characters (matched by name + book_id) are
+    updated instead of skipped.
+
+    Returns ``{created_count, updated_count, skipped_count, errors}``.
     """
+    from backend.schemas.character import CharacterCreate
+
     created_count = 0
+    updated_count = 0
     skipped_count = 0
     errors = []
     for data in characters_data:
@@ -76,18 +82,35 @@ def bulk_create_characters(
             errors.append("Skipped item with empty name")
             continue
         try:
-            from backend.schemas.character import CharacterCreate
-
             obj = CharacterCreate(**data)
-            character = Character(**obj.model_dump(), book_id=book_id)
-            db.add(character)
-            db.flush()
-            created_count += 1
+            existing = (
+                db.query(Character)
+                .filter(Character.book_id == book_id, Character.name == name)
+                .first()
+            )
+            if existing and overwrite:
+                for key, value in obj.model_dump(exclude_unset=True).items():
+                    setattr(existing, key, value)
+                db.flush()
+                updated_count += 1
+            elif existing:
+                skipped_count += 1
+                errors.append(f"'{name}' already exists, skipped")
+            else:
+                character = Character(**obj.model_dump(), book_id=book_id)
+                db.add(character)
+                db.flush()
+                created_count += 1
         except Exception as e:
             skipped_count += 1
             errors.append(f"Failed to import '{name}': {e}")
     db.commit()
-    return {"created_count": created_count, "skipped_count": skipped_count, "errors": errors}
+    return {
+        "created_count": created_count,
+        "updated_count": updated_count,
+        "skipped_count": skipped_count,
+        "errors": errors,
+    }
 
 
 def delete_character(db: Session, character_id: int) -> bool:

@@ -144,7 +144,7 @@ def import_characters(
     """Bulk import characters from a JSON payload."""
     book_repo.get_book_for_user(db, book_id, current_user.id)
     data_list = [c.model_dump() for c in body.characters]
-    return character_repo.bulk_create_characters(db, data_list, book_id)
+    return character_repo.bulk_create_characters(db, data_list, book_id, overwrite=body.overwrite)
 
 
 @router.delete("/{character_id}", status_code=204)

@@ -85,10 +85,12 @@ class CharacterImportItem(BaseModel):
 
 class CharacterImportRequest(BaseModel):
     format_version: int = 1
+    overwrite: bool = False
     characters: list[CharacterImportItem]
 
 
 class CharacterImportResult(BaseModel):
     created_count: int = 0
+    updated_count: int = 0
     skipped_count: int = 0
     errors: list[str] = []

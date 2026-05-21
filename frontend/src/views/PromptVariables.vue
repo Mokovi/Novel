@@ -668,20 +668,21 @@ function closeContextMenu() {
 }
 async function handleContextDelete() {
   const target = contextMenu.target
+  const type = contextMenu.type
   if (!target) return
+  const typeLabel = type === 'character' ? '人物' : '地点'
   closeContextMenu()
-  const typeLabel = contextMenu.type === 'character' ? '人物' : '地点'
   const confirmed = await showConfirm({ content: `确定删除${typeLabel}「${target.name}」吗？` })
   if (!confirmed) return
   try {
-    if (contextMenu.type === 'character') {
+    if (type === 'character') {
       await deleteCharacter(target.id)
     } else {
       await deleteLocation(target.id)
     }
     message.success(`${typeLabel}已删除`)
     lockedIds.delete(target.id)
-    if (contextMenu.type === 'character') await fetchCharacters()
+    if (type === 'character') await fetchCharacters()
     else await fetchLocations()
   } catch (e) {
     message.error('删除失败: ' + (e.response?.data?.detail || e.message))
@@ -689,11 +690,12 @@ async function handleContextDelete() {
 }
 async function handleContextToggleLock() {
   const target = contextMenu.target
+  const type = contextMenu.type
   if (!target) return
   const newLocked = !target.is_locked
   closeContextMenu()
   try {
-    if (contextMenu.type === 'character') {
+    if (type === 'character') {
       await updateCharacter(target.id, { is_locked: newLocked })
       target.is_locked = newLocked
     } else {
@@ -919,13 +921,33 @@ async function handleFileSelected(e) {
       message.error('无效的导入文件：缺少 characters 数组')
       return
     }
+
+    // Check for duplicate names and prompt for overwrite
+    const existingNames = new Set(characters.value.map(c => c.name))
+    const importNames = data.characters.map(c => c.name).filter(Boolean)
+    const duplicates = importNames.filter(n => existingNames.has(n))
+    if (duplicates.length > 0) {
+      const confirmed = await showConfirm({
+        title: '检测到重名人物',
+        content: `${duplicates.length} 个人物已存在（如：${duplicates.slice(0, 3).join('、')}${duplicates.length > 3 ? '...' : ''}），是否覆盖？`,
+        positiveText: '覆盖',
+        negativeText: '跳过',
+      })
+      if (confirmed) data.overwrite = true
+    }
+
     const res = await importCharacters(bookId.value, data)
     const result = res.data
+    const parts = []
+    if (result.created_count) parts.push(`${result.created_count} 条新建`)
+    if (result.updated_count) parts.push(`${result.updated_count} 条更新`)
+    if (result.skipped_count) parts.push(`${result.skipped_count} 条跳过`)
+    const msg = parts.length ? parts.join('，') : '无变化'
     if (result.errors?.length) {
-      message.warning(`导入完成，${result.created_count} 条成功，${result.skipped_count} 条跳过`)
+      message.warning(`导入完成：${msg}`)
       console.warn('Import errors:', result.errors)
     } else {
-      message.success(`成功导入 ${result.created_count} 个人物`)
+      message.success(`导入完成：${msg}`)
     }
     await fetchCharacters()
   } catch (err) {
