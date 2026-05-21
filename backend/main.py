@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import load_config
-from backend.routers import admin, api_plans, auth, books, chapters, characters, generate, model_apis, prompt_variables, settings, task_bindings, templates, worldview
+from backend.routers import admin, api_plans, auth, books, chapters, characters, generate, locations, model_apis, prompt_variables, settings, task_bindings, templates, worldview
 
 config = load_config()
 
@@ -36,6 +36,7 @@ app.include_router(books.router)
 app.include_router(chapters.router)
 app.include_router(characters.router)
 app.include_router(generate.router)
+app.include_router(locations.router)
 app.include_router(model_apis.router)
 app.include_router(task_bindings.router)
 app.include_router(templates.router)

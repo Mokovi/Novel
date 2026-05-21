@@ -108,18 +108,19 @@
         </div>
       </n-tab-pane>
 
-      <!-- ═══ 地图 ═══ -->
-      <n-tab-pane name="map" tab="地图">
-        <div class="worldview-section">
-          <SectionHeader title="地图设定" tag="map_data">
-            <n-button size="small" quaternary @click="handleRefreshMap">
+      <!-- ═══ 地点 ═══ -->
+      <n-tab-pane name="map" tab="地点">
+        <div class="character-section">
+          <SectionHeader title="地点管理" tag="map_data">
+            <n-button size="small" quaternary @click="fetchLocations">
               <template #icon>
                 <n-icon>
                   <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </n-icon>
               </template>
+              刷新
             </n-button>
-            <n-button size="small" @click="mapGen.prepare()">
+            <n-button size="small" @click="locGen.prepare()">
               <template #icon>
                 <n-icon>
                   <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" fill="none"/></svg>
@@ -127,35 +128,78 @@
               </template>
               AI 生成设定
             </n-button>
-            <n-button size="small" type="primary" :loading="mapSaving" @click="handleSaveMap">保存</n-button>
+            <n-button type="primary" size="small" @click="showCreateLoc = true">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </n-icon>
+              </template>
+              新建地点
+            </n-button>
           </SectionHeader>
 
-          <div class="editor-mode-bar">
-            <button class="mode-btn" :class="{ active: mapPreview }" @click="mapPreview = true">预览</button>
-            <button class="mode-btn" :class="{ active: !mapPreview }" @click="mapPreview = false">编辑</button>
+          <div class="filter-bar">
+            <n-radio-group v-model:value="locTypeFilter" size="small">
+              <n-radio-button value="">全部</n-radio-button>
+              <n-radio-button value="continent">大陆</n-radio-button>
+              <n-radio-button value="country">国家</n-radio-button>
+              <n-radio-button value="city">城市</n-radio-button>
+              <n-radio-button value="landmark">地标</n-radio-button>
+              <n-radio-button value="region">区域</n-radio-button>
+            </n-radio-group>
           </div>
-          <template v-if="mapPreview">
-            <div class="preview-wrapper full-width-preview">
-              <CopyButton :text="mapText" />
-              <div class="markdown-preview" v-html="renderMarkdown(mapText)" />
-            </div>
-          </template>
-          <textarea v-else v-model="mapText" class="markdown-textarea worldview-textarea" placeholder="在此输入地图设定（支持 Markdown 格式）&#10;&#10;可以使用 ## 标题、- 列表、**加粗** 等格式" />
+          <div v-if="locLoading" class="loading-center"><n-spin size="medium" /></div>
+          <n-empty v-else-if="locations.length === 0" description="暂无地点，点击「新建地点」开始创建" class="empty-state" />
+          <div v-else class="card-grid">
+            <n-card v-for="loc in filteredLocations" :key="loc.id" class="enhanced-card character-card" hoverable size="small">
+              <div class="card-content">
+                <div class="card-top">
+                  <span class="character-name">{{ loc.name }}</span>
+                  <n-tag v-if="loc.location_type" :type="locTypeColors[loc.location_type] || 'default'" size="tiny">{{ locTypeLabels[loc.location_type] || loc.location_type }}</n-tag>
+                </div>
+                <div class="card-desc">{{ loc.description || '暂无描述' }}</div>
+                <div class="card-footer">
+                  <span class="card-time">{{ formatDate(loc.updated_at) }}</span>
+                </div>
+              </div>
+            </n-card>
+          </div>
+
+          <!-- Create location modal -->
+          <n-modal v-model:show="showCreateLoc" preset="card" title="新建地点" style="width: 480px" segmented>
+            <n-space vertical>
+              <n-input v-model:value="newLocName" placeholder="地点名称" />
+              <n-select v-model:value="newLocType" placeholder="地点类型" :options="[
+                { label: '大陆', value: 'continent' },
+                { label: '国家', value: 'country' },
+                { label: '城市', value: 'city' },
+                { label: '地标', value: 'landmark' },
+                { label: '区域', value: 'region' },
+              ]" clearable />
+              <n-input v-model:value="newLocDesc" type="textarea" rows="4" placeholder="地点描述" />
+            </n-space>
+            <template #footer>
+              <n-space justify="end">
+                <n-button size="small" @click="showCreateLoc = false">取消</n-button>
+                <n-button size="small" type="primary" @click="handleCreateLocation">确认</n-button>
+              </n-space>
+            </template>
+          </n-modal>
 
           <GenModal
             title="AI 生成地图设定"
             gen-type="map"
-            :visible="mapGen.visible.value"
-            :phase="mapGen.phase.value"
-            :output="mapGen.output.value"
-            :model="mapGen.model.value"
-            :tokens="mapGen.tokens.value"
-            :running="mapGen.running.value"
-            :injection-items="mapGen.injectionItems.value"
+            :visible="locGen.visible.value"
+            :phase="locGen.phase.value"
+            :output="locGen.output.value"
+            :model="locGen.model.value"
+            :tokens="locGen.tokens.value"
+            :running="locGen.running.value"
+            :injection-items="locGen.injectionItems.value"
             :book-id="bookId"
-            @start="mapGen.start"
-            @cancel="mapGen.cancel()"
-            @close="mapGen.close()"
+            @start="locGen.start"
+            @cancel="locGen.cancel()"
+            @close="locGen.close()"
           />
         </div>
       </n-tab-pane>
@@ -293,7 +337,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { NCard, NSpace } from 'naive-ui'
 import { marked } from 'marked'
-import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateBookOutline, getBookWorldview, getBookMap, updateBookMap } from '../api/books.js'
+import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateBookOutline, getBookWorldview } from '../api/books.js'
+import { listLocations, createLocation } from '../api/locations.js'
 import { listCharacters, importCharacters } from '../api/characters.js'
 import { generateWorldview, fetchWorldviewInjections, generateMap, fetchMapInjections, generateCharacters, fetchCharacterInjections } from '../api/generate.js'
 import CharacterForm from '../components/character/CharacterForm.vue'
@@ -338,11 +383,14 @@ const charLoading = ref(false)
 const charRoleFilter = ref('')
 const showCreateChar = ref(false)
 
-// ── Map tab state ──
-const mapText = ref('')
-const mapPreview = ref(true)
-const mapSaving = ref(false)
-const mapLoaded = ref(false)
+// ── Locations tab state ──
+const locations = ref([])
+const locLoading = ref(false)
+const locTypeFilter = ref('')
+const showCreateLoc = ref(false)
+const newLocName = ref('')
+const newLocType = ref('')
+const newLocDesc = ref('')
 
 // ── SSE Generation composables ──
 const worldviewGen = useSSEGeneration({
@@ -356,15 +404,12 @@ const worldviewGen = useSSEGeneration({
   },
 })
 
-const mapGen = useSSEGeneration({
+const locGen = useSSEGeneration({
   genType: 'map',
   bookId,
   fetchInjectionsFn: fetchMapInjections,
   generateFn: generateMap,
-  onReload: () => {
-    mapLoaded.value = false
-    loadMap()
-  },
+  onReload: fetchLocations,
 })
 
 const charGen = useSSEGeneration({
@@ -392,6 +437,15 @@ const charRoleLabel = (type) => {
   return map[type] || type
 }
 const formatDate = (d) => d ? new Date(d).toLocaleDateString('zh-CN') : ''
+
+const locTypeLabels = {
+  continent: '大陆', country: '国家', city: '城市',
+  landmark: '地标', region: '区域',
+}
+const locTypeColors = {
+  continent: 'geekblue', country: 'purple', city: 'cyan',
+  landmark: 'orange', region: 'default',
+}
 
 function validateJson(name) {
   const val = editValues[name]
@@ -432,16 +486,41 @@ async function loadWorldview() {
   }
 }
 
-async function loadMap() {
-  if (mapLoaded.value) return
+async function fetchLocations() {
+  locLoading.value = true
   try {
-    const res = await getBookMap(bookId.value)
-    mapText.value = res.data.map || ''
-    mapLoaded.value = true
+    const res = await listLocations(bookId.value)
+    locations.value = res.data || []
+  } catch { message.error('加载地点列表失败') }
+  finally { locLoading.value = false }
+}
+
+async function handleCreateLocation() {
+  if (!newLocName.value.trim()) {
+    message.warning('请输入地点名称')
+    return
+  }
+  try {
+    await createLocation({
+      name: newLocName.value.trim(),
+      location_type: newLocType.value || null,
+      description: newLocDesc.value || null,
+    }, bookId.value)
+    message.success('地点创建成功')
+    showCreateLoc.value = false
+    newLocName.value = ''
+    newLocType.value = ''
+    newLocDesc.value = ''
+    await fetchLocations()
   } catch (e) {
-    message.error('加载地图失败: ' + (e.response?.data?.detail || e.message))
+    message.error('创建失败: ' + (e.response?.data?.detail || e.message))
   }
 }
+
+const filteredLocations = computed(() => {
+  if (!locTypeFilter.value) return locations.value
+  return locations.value.filter(l => l.location_type === locTypeFilter.value)
+})
 
 async function fetchCharacters() {
   charLoading.value = true
@@ -467,7 +546,7 @@ function onCharCreated() {
 // ── Tab switch handlers ──
 watch(activeTab, (tab) => {
   if (tab === 'worldview' && !worldviewLoaded.value) loadWorldview()
-  if (tab === 'map' && !mapLoaded.value) loadMap()
+  if (tab === 'map' && locations.value.length === 0) fetchLocations()
   if (tab === 'characters' && characters.value.length === 0) fetchCharacters()
 })
 
@@ -483,8 +562,6 @@ async function handleSave(v) {
     else if (name === 'worldview') await updateBookWorldview(bid, { worldview: editValues[name] })
     else if (name === 'writing_style') {
       await updateBook(bid, { writing_style: editValues[name] })
-    } else if (name === 'map_data') {
-      await updateBookMap(bid, { map: editValues[name] })
     }
     message.success(`${v.label} 已保存`)
   } catch (e) {
@@ -503,25 +580,9 @@ async function handleSaveWorldview() {
   } finally { worldviewSaving.value = false }
 }
 
-async function handleSaveMap() {
-  mapSaving.value = true
-  try {
-    await updateBookMap(bookId.value, { map: mapText.value })
-    message.success('地图设定已保存')
-  } catch (e) {
-    message.error('保存失败: ' + (e.response?.data?.detail || e.message))
-  } finally { mapSaving.value = false }
-}
-
 async function handleRefreshWorldview() {
   worldviewLoaded.value = false
   await loadWorldview()
-  message.success('已刷新')
-}
-
-async function handleRefreshMap() {
-  mapLoaded.value = false
-  await loadMap()
   message.success('已刷新')
 }
 
@@ -607,9 +668,8 @@ async function handleFileSelected(e) {
 async function handleRefresh() {
   await loadVariables()
   worldviewLoaded.value = false
-  mapLoaded.value = false
   if (activeTab.value === 'worldview') await loadWorldview()
-  if (activeTab.value === 'map') await loadMap()
+  if (activeTab.value === 'map') await fetchLocations()
   if (activeTab.value === 'characters') await fetchCharacters()
   message.success('已刷新')
 }
@@ -617,7 +677,7 @@ async function handleRefresh() {
 onMounted(() => {
   loadVariables()
   if (route.query.tab === 'worldview') loadWorldview()
-  if (route.query.tab === 'map') loadMap()
+  if (route.query.tab === 'map') fetchLocations()
   if (route.query.tab === 'characters') fetchCharacters()
 })
 </script>
