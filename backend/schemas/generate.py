@@ -11,6 +11,7 @@ class InjectionOverrides(BaseModel):
     exclude_variables: list[str] = Field(default_factory=list)
     extra_variables: dict[str, str] = Field(default_factory=dict)
     added_character_ids: list[int] = Field(default_factory=list)
+    added_location_ids: list[int] = Field(default_factory=list)
 
 
 class GenerateRequest(BaseModel):

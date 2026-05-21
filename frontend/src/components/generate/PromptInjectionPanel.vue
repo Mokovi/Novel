@@ -31,9 +31,13 @@
       </div>
     </div>
 
-    <!-- ─── Character selection grid ─── -->
+    <!-- ─── Character selection grid (collapsible) ─── -->
     <div class="inj-section">
-      <label class="inj-section-label">添加角色档案</label>
+      <div class="inj-section-header" @click="charCollapsed = !charCollapsed">
+        <span class="inj-section-arrow" :class="{ collapsed: charCollapsed }">▶</span>
+        <label class="inj-section-label">添加角色档案</label>
+      </div>
+      <div v-show="!charCollapsed" class="inj-section-body">
 
       <!-- Role type filter -->
       <div class="inj-char-filters">
@@ -97,29 +101,80 @@
           <button class="inj-char-tag-remove" @click="removeCharacter(c.id)">✕</button>
         </span>
       </div>
+      </div>
     </div>
 
-    <!-- ─── Custom extra variables ─── -->
+    <!-- ─── Location selection grid (collapsible) ─── -->
     <div class="inj-section">
-      <label class="inj-section-label">自定义内容</label>
-      <div class="inj-custom-list">
-        <div v-for="(pair, i) in extraPairs" :key="i" class="inj-custom-row">
-          <input
-            v-model="pair.key"
-            type="text"
-            class="inj-custom-key"
-            placeholder="变量名"
-          />
-          <textarea
-            v-model="pair.value"
-            class="inj-custom-value"
-            placeholder="内容（将注入到模板中的 {{变量名}}）"
-            rows="2"
-          />
-          <button class="inj-custom-remove" @click="removeExtraPair(i)">✕</button>
-        </div>
+      <div class="inj-section-header" @click="locCollapsed = !locCollapsed">
+        <span class="inj-section-arrow" :class="{ collapsed: locCollapsed }">▶</span>
+        <label class="inj-section-label">地图档案</label>
       </div>
-      <button class="inj-custom-add" @click="addExtraPair">+ 添加自定义内容</button>
+      <div v-show="!locCollapsed" class="inj-section-body">
+
+      <!-- Location type filter -->
+      <div class="inj-char-filters">
+        <button
+          v-for="t in locTypeFilters"
+          :key="t.value"
+          class="inj-char-filter-btn"
+          :class="{ active: locTypeFilter === t.value }"
+          @click="locTypeFilter = locTypeFilter === t.value ? '' : t.value"
+        >{{ t.label }}</button>
+      </div>
+
+      <!-- Search input -->
+      <input
+        v-model="locSearchQuery"
+        type="text"
+        class="inj-char-input"
+        placeholder="搜索地点名..."
+      />
+
+      <!-- Loading state -->
+      <div v-if="locLoading" class="inj-char-grid-loading">
+        <n-spin size="small" />
+      </div>
+
+      <!-- Empty state -->
+      <n-empty
+        v-else-if="!locLoading && allLocations.length === 0"
+        description="暂无地点，请在 PromptVariables 地图页面创建"
+        class="inj-char-empty"
+      />
+
+      <!-- Location grid -->
+      <template v-else>
+        <div v-if="filteredLocations.length === 0" class="inj-char-no-result">
+          未找到匹配地点
+        </div>
+        <div v-else class="inj-char-grid">
+          <div
+            v-for="loc in filteredLocations"
+            :key="loc.id"
+            class="inj-char-card"
+            :class="{ selected: isLocSelected(loc.id) }"
+            @click="toggleLocation(loc)"
+          >
+            <span class="inj-char-card-name">{{ loc.name }}</span>
+            <span v-if="loc.location_type" class="inj-char-card-type">{{ loc.location_type }}</span>
+          </div>
+        </div>
+      </template>
+
+      <!-- Selected tags -->
+      <div v-if="addedLocations.length" class="inj-char-tags">
+        <span
+          v-for="loc in addedLocations"
+          :key="loc.id"
+          class="inj-char-tag"
+        >
+          {{ loc.name }}
+          <span v-if="loc.location_type" class="inj-char-tag-type">({{ loc.location_type }})</span>
+          <button class="inj-char-tag-remove" @click="removeLocation(loc.id)">✕</button>
+        </span>
+      </div>
+      </div>
     </div>
 
     <!-- ─── User prompt ─── -->
@@ -176,6 +231,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { listCharacters } from '../../api/characters.js'
+import { listLocations } from '../../api/locations.js'
 import { previewPrompt, previewArcPrompt, previewVolumePrompt, previewBookPrompt, previewWorldviewPrompt, previewMapPrompt, previewLocationPrompt, previewCharacterPrompt } from '../../api/generate.js'
 
 const props = defineProps({
@@ -214,6 +270,10 @@ function isEnabled(item) {
 function toggleItem(item) {
   enabledMap.value[item.variable] = !enabledMap.value[item.variable]
 }
+
+// ── Collapse state for character and location sections ──
+const charCollapsed = ref(false)
+const locCollapsed = ref(false)
 
 // ── Role type definitions ──
 const roleTypes = [
@@ -270,6 +330,16 @@ onMounted(async () => {
   } finally {
     charLoading.value = false
   }
+
+  locLoading.value = true
+  try {
+    const res = await listLocations(props.bookId, { limit: 200 })
+    allLocations.value = res.data || []
+  } catch (e) {
+    console.error('Failed to load locations:', e)
+  } finally {
+    locLoading.value = false
+  }
 })
 
 onUnmounted(() => {
@@ -277,15 +347,52 @@ onUnmounted(() => {
   pendingPreviewVersion = 0
 })
 
-// ── Extra variables ──
-const extraPairs = ref([])
+// ── Location grid ──
+const allLocations = ref([])
+const locTypeFilter = ref('')
+const locSearchQuery = ref('')
+const locLoading = ref(false)
+const addedLocations = ref([])
 
-function addExtraPair() {
-  extraPairs.value.push({ key: '', value: '' })
+const locTypeFilters = computed(() => {
+  const types = new Set()
+  types.add('')
+  for (const loc of allLocations.value) {
+    if (loc.location_type) types.add(loc.location_type)
+  }
+  return Array.from(types).map(t => ({
+    label: t || '全部',
+    value: t,
+  }))
+})
+
+const filteredLocations = computed(() => {
+  let list = allLocations.value
+  if (locTypeFilter.value) {
+    list = list.filter(l => l.location_type === locTypeFilter.value)
+  }
+  if (locSearchQuery.value.trim()) {
+    const q = locSearchQuery.value.trim().toLowerCase()
+    list = list.filter(l => l.name.toLowerCase().includes(q))
+  }
+  return list
+})
+
+function isLocSelected(id) {
+  return addedLocations.value.some(l => l.id === id)
 }
 
-function removeExtraPair(i) {
-  extraPairs.value.splice(i, 1)
+function toggleLocation(loc) {
+  const idx = addedLocations.value.findIndex(al => al.id === loc.id)
+  if (idx >= 0) {
+    addedLocations.value.splice(idx, 1)
+  } else {
+    addedLocations.value.push(loc)
+  }
+}
+
+function removeLocation(id) {
+  addedLocations.value = addedLocations.value.filter(l => l.id !== id)
 }
 
 // ── User prompt ──
@@ -299,16 +406,11 @@ function buildOverrides() {
       excludeVariables.push(item.variable)
     }
   }
-  const extraVariables = {}
-  for (const pair of extraPairs.value) {
-    if (pair.key.trim()) {
-      extraVariables[pair.key.trim()] = pair.value
-    }
-  }
   return {
     exclude_variables: excludeVariables,
-    extra_variables: extraVariables,
+    extra_variables: {},
     added_character_ids: addedCharacters.value.map((c) => c.id),
+    added_location_ids: addedLocations.value.map((l) => l.id),
   }
 }
 
@@ -324,6 +426,7 @@ async function _fetchPreview() {
   const hasOverrides = overrides.exclude_variables.length > 0
     || Object.keys(overrides.extra_variables).length > 0
     || overrides.added_character_ids.length > 0
+    || overrides.added_location_ids.length > 0
   const overrideArg = hasOverrides ? overrides : null
 
   try {
@@ -385,7 +488,7 @@ function _schedulePreviewRefresh() {
 }
 
 // Auto-refresh preview when configuration changes (while modal is open)
-watch([enabledMap, addedCharacters, extraPairs, userPrompt], () => {
+watch([enabledMap, addedCharacters, addedLocations, userPrompt], () => {
   if (showPreview.value) _schedulePreviewRefresh()
 }, { deep: true })
 
@@ -493,6 +596,45 @@ function handleStart() {
 .inj-item-hint {
   color: var(--color-text-muted);
   font-size: 11px;
+}
+
+/* ─── Collapsible sections ─── */
+.inj-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+  margin-bottom: 8px;
+}
+
+.inj-section-header:hover .inj-section-label {
+  color: var(--color-accent);
+}
+
+.inj-section-header .inj-section-label {
+  margin-bottom: 0;
+}
+
+.inj-section-arrow {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.inj-section-arrow.collapsed {
+  transform: rotate(0deg);
+}
+
+.inj-section-arrow:not(.collapsed) {
+  transform: rotate(90deg);
+}
+
+.inj-section-body {
+  overflow: hidden;
+  transition: max-height 0.2s ease;
 }
 
 /* ─── Character filters & grid ─── */
@@ -642,83 +784,6 @@ function handleStart() {
 
 .inj-char-tag-remove:hover {
   color: #e74c3c;
-}
-
-/* ─── Custom variables ─── */
-.inj-custom-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.inj-custom-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.inj-custom-key {
-  width: 120px;
-  flex-shrink: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  font-family: var(--font-mono, monospace);
-  outline: none;
-  background: #fff;
-}
-
-.inj-custom-key:focus {
-  border-color: var(--color-accent);
-}
-
-.inj-custom-value {
-  flex: 1;
-  padding: 6px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  resize: vertical;
-  outline: none;
-  background: #fff;
-  font-family: inherit;
-}
-
-.inj-custom-value:focus {
-  border-color: var(--color-accent);
-}
-
-.inj-custom-remove {
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-size: 14px;
-  padding: 6px 4px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.inj-custom-remove:hover {
-  color: #e74c3c;
-}
-
-.inj-custom-add {
-  border: 1px dashed var(--color-border);
-  background: none;
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  padding: 6px 14px;
-  border-radius: 6px;
-  margin-top: 6px;
-  transition: border-color 0.15s;
-}
-
-.inj-custom-add:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
 }
 
 /* ─── User prompt ─── */

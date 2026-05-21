@@ -842,7 +842,19 @@ def apply_injection_overrides(
             if not matched:
                 result["character_profiles"] = added
 
-    # 3. Merge extra variables
+    # 3. Add extra locations (replaces map_data with selected locations)
+    if overrides.added_location_ids:
+        from backend.repositories import location_repo
+
+        locs = []
+        for lid in overrides.added_location_ids:
+            loc = location_repo.get_location(db, lid)
+            if loc:
+                locs.append(loc)
+        if locs:
+            result["map_data"] = _format_location_profiles(locs)
+
+    # 4. Merge extra variables
     for key, value in overrides.extra_variables.items():
         result[key] = value
 
