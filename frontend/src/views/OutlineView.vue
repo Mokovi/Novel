@@ -546,11 +546,19 @@ const store = useChaptersStore()
 
 function copyText(text) {
   if (!text) return
-  navigator.clipboard.writeText(text).then(() => {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  try {
+    document.execCommand('copy')
     message.success('已复制')
-  }).catch(() => {
+  } catch {
     message.warning('复制失败')
-  })
+  }
+  document.body.removeChild(textarea)
 }
 const settingsStore = useSettingsStore()
 
