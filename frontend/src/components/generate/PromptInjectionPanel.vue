@@ -31,31 +31,61 @@
       </div>
     </div>
 
-    <!-- ─── Character search & add ─── -->
+    <!-- ─── Character selection grid ─── -->
     <div class="inj-section">
       <label class="inj-section-label">添加角色档案</label>
-      <div class="inj-char-search">
-        <input
-          v-model="charQuery"
-          type="text"
-          class="inj-char-input"
-          placeholder="搜索角色名..."
-          @input="onCharSearchInput"
-          @focus="showCharDropdown = true"
-        />
-        <div v-if="showCharDropdown && (charResults.length || charSearchLoading)" class="inj-char-dropdown">
-          <div v-if="charSearchLoading" class="inj-char-dropdown-loading">搜索中...</div>
+
+      <!-- Role type filter -->
+      <div class="inj-char-filters">
+        <button
+          v-for="role in roleTypes"
+          :key="role.value"
+          class="inj-char-filter-btn"
+          :class="{ active: charRoleFilter === role.value }"
+          @click="charRoleFilter = charRoleFilter === role.value ? '' : role.value"
+        >{{ role.label }}</button>
+      </div>
+
+      <!-- Search input -->
+      <input
+        v-model="charSearchQuery"
+        type="text"
+        class="inj-char-input"
+        placeholder="搜索角色名..."
+      />
+
+      <!-- Loading state -->
+      <div v-if="charLoading" class="inj-char-grid-loading">
+        <n-spin size="small" />
+      </div>
+
+      <!-- Empty state -->
+      <n-empty
+        v-else-if="!charLoading && allCharacters.length === 0"
+        description="暂无角色，请在角色管理页面创建"
+        class="inj-char-empty"
+      />
+
+      <!-- Character grid -->
+      <template v-else>
+        <div v-if="filteredCharacters.length === 0" class="inj-char-no-result">
+          未找到匹配角色
+        </div>
+        <div v-else class="inj-char-grid">
           <div
-            v-for="c in charResults"
+            v-for="c in filteredCharacters"
             :key="c.id"
-            class="inj-char-option"
-            @click="addCharacter(c)"
+            class="inj-char-card"
+            :class="{ selected: isCharSelected(c.id) }"
+            @click="toggleCharacter(c)"
           >
-            <span class="inj-char-option-name">{{ c.name }}</span>
-            <span v-if="c.role_type" class="inj-char-option-type">{{ c.role_type }}</span>
+            <span class="inj-char-card-name">{{ c.name }}</span>
+            <span v-if="c.role_type" class="inj-char-card-type">{{ c.role_type }}</span>
           </div>
         </div>
-      </div>
+      </template>
+
+      <!-- Selected tags -->
       <div v-if="addedCharacters.length" class="inj-char-tags">
         <span
           v-for="c in addedCharacters"
@@ -143,7 +173,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { listCharacters } from '../../api/characters.js'
 import { previewPrompt, previewArcPrompt, previewVolumePrompt, previewBookPrompt, previewWorldviewPrompt, previewMapPrompt } from '../../api/generate.js'
@@ -185,51 +215,62 @@ function toggleItem(item) {
   enabledMap.value[item.variable] = !enabledMap.value[item.variable]
 }
 
-// ── Character search ──
-const charQuery = ref('')
-const charResults = ref([])
-const charSearchLoading = ref(false)
-const showCharDropdown = ref(false)
-const addedCharacters = ref([])
-let searchTimer = null
+// ── Role type definitions ──
+const roleTypes = [
+  { label: '全部', value: '' },
+  { label: '主角', value: 'protagonist' },
+  { label: '反派', value: 'antagonist' },
+  { label: '配角', value: 'supporting' },
+  { label: '龙套', value: 'minor' },
+]
 
-function onCharSearchInput() {
-  clearTimeout(searchTimer)
-  const q = charQuery.value.trim()
-  if (!q) {
-    charResults.value = []
-    showCharDropdown.value = false
-    return
+// ── Character grid ──
+const allCharacters = ref([])
+const charRoleFilter = ref('')
+const charSearchQuery = ref('')
+const charLoading = ref(false)
+const addedCharacters = ref([])
+
+const filteredCharacters = computed(() => {
+  let list = allCharacters.value
+  if (charRoleFilter.value) {
+    list = list.filter(c => c.role_type === charRoleFilter.value)
   }
-  charSearchLoading.value = true
-  showCharDropdown.value = true
-  searchTimer = setTimeout(async () => {
-    try {
-      const res = await listCharacters(props.bookId, { search: q, limit: 20 })
-      charResults.value = (res.data || []).filter(
-        (c) => !addedCharacters.value.some((ac) => ac.id === c.id)
-      )
-    } catch (e) {
-      console.error('Character search failed:', e)
-      charResults.value = []
-    } finally {
-      charSearchLoading.value = false
-    }
-  }, 300)
+  if (charSearchQuery.value.trim()) {
+    const q = charSearchQuery.value.trim().toLowerCase()
+    list = list.filter(c => c.name.toLowerCase().includes(q))
+  }
+  return list
+})
+
+function isCharSelected(id) {
+  return addedCharacters.value.some(c => c.id === id)
 }
 
-function addCharacter(c) {
-  if (!addedCharacters.value.some((ac) => ac.id === c.id)) {
+function toggleCharacter(c) {
+  const idx = addedCharacters.value.findIndex(ac => ac.id === c.id)
+  if (idx >= 0) {
+    addedCharacters.value.splice(idx, 1)
+  } else {
     addedCharacters.value.push(c)
   }
-  charQuery.value = ''
-  charResults.value = []
-  showCharDropdown.value = false
 }
 
 function removeCharacter(id) {
-  addedCharacters.value = addedCharacters.value.filter((c) => c.id !== id)
+  addedCharacters.value = addedCharacters.value.filter(c => c.id !== id)
 }
+
+onMounted(async () => {
+  charLoading.value = true
+  try {
+    const res = await listCharacters(props.bookId, { limit: 200 })
+    allCharacters.value = res.data || []
+  } catch (e) {
+    console.error('Failed to load characters:', e)
+  } finally {
+    charLoading.value = false
+  }
+})
 
 // ── Extra variables ──
 const extraPairs = ref([])
@@ -417,9 +458,35 @@ function handleStart() {
   font-size: 11px;
 }
 
-/* ─── Character search ─── */
-.inj-char-search {
-  position: relative;
+/* ─── Character filters & grid ─── */
+.inj-char-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.inj-char-filter-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.inj-char-filter-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.inj-char-filter-btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
 }
 
 .inj-char-input {
@@ -431,6 +498,7 @@ function handleStart() {
   outline: none;
   box-sizing: border-box;
   background: #fff;
+  margin-bottom: 8px;
 }
 
 .inj-char-input:focus {
@@ -438,48 +506,67 @@ function handleStart() {
   box-shadow: 0 0 0 2px rgba(201, 169, 78, 0.12);
 }
 
-.inj-char-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: #fff;
+.inj-char-grid-loading {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.inj-char-empty {
+  padding: 12px 0;
+}
+
+.inj-char-no-result {
+  text-align: center;
+  padding: 16px 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.inj-char-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.inj-char-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  max-height: 200px;
-  overflow-y: auto;
-  z-index: 100;
-  margin-top: 2px;
-}
-
-.inj-char-dropdown-loading {
-  padding: 10px 12px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  text-align: center;
-}
-
-.inj-char-option {
-  padding: 8px 12px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 13px;
+  transition: all 0.15s;
+  background: #fff;
 }
 
-.inj-char-option:hover {
-  background: var(--color-bg-page);
+.inj-char-card:hover {
+  border-color: var(--color-accent);
 }
 
-.inj-char-option-name {
+.inj-char-card.selected {
+  border-color: var(--color-accent);
+  background: rgba(201, 169, 78, 0.06);
+}
+
+.inj-char-card-name {
+  font-size: 12px;
+  font-weight: 500;
   color: var(--color-text-primary);
+  text-align: center;
+  line-height: 1.3;
+  word-break: break-all;
 }
 
-.inj-char-option-type {
-  font-size: 11px;
+.inj-char-card-type {
+  font-size: 10px;
   color: var(--color-text-muted);
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--color-bg-page);
 }
 
 .inj-char-tags {
