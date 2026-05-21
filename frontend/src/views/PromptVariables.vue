@@ -716,7 +716,7 @@ async function handleRefreshMap() {
 
 // ── Character import/export handlers ──
 
-function handleExportCharacters() {
+async function handleExportCharacters() {
   const data = characters.value.map(c => ({
     name: c.name,
     aliases: c.aliases || null,
@@ -732,6 +732,28 @@ function handleExportCharacters() {
     [JSON.stringify({ format_version: 1, characters: data }, null, 2)],
     { type: 'application/json' },
   )
+
+  // Use File System Access API if available (native "Save As" dialog)
+  if ('showSaveFilePicker' in window) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: `characters_${bookId.value}.json`,
+        types: [{ description: 'JSON 文件', accept: { 'application/json': ['.json'] } }],
+      })
+      const writable = await handle.createWritable()
+      await writable.write(blob)
+      await writable.close()
+      message.success('导出成功')
+      return
+    } catch (err) {
+      // User cancelled the save dialog — do nothing
+      if (err.name === 'AbortError' || err.name === 'SecurityError') return
+      // Fall through to fallback on other errors
+      console.warn('showSaveFilePicker failed, falling back to download:', err)
+    }
+  }
+
+  // Fallback: traditional browser download
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

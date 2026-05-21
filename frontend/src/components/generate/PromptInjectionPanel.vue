@@ -12,7 +12,6 @@
           v-for="item in injectionItems"
           :key="item.variable"
           class="inj-item"
-          :class="{ 'inj-item-disabled': item.required }"
         >
           <span
             class="inj-item-toggle"
@@ -28,7 +27,6 @@
           </span>
           <span class="inj-item-label">{{ item.label }}</span>
           <span v-if="!item.available" class="inj-item-hint">(暂无内容)</span>
-          <span v-if="item.required" class="inj-item-badge">必需</span>
         </div>
       </div>
     </div>
@@ -184,7 +182,6 @@ function isEnabled(item) {
 }
 
 function toggleItem(item) {
-  if (item.required) return
   enabledMap.value[item.variable] = !enabledMap.value[item.variable]
 }
 
@@ -252,7 +249,7 @@ const userPrompt = ref('')
 function buildOverrides() {
   const excludeVariables = []
   for (const item of props.injectionItems) {
-    if (!isEnabled(item) && !item.required) {
+    if (!isEnabled(item)) {
       excludeVariables.push(item.variable)
     }
   }
@@ -385,13 +382,8 @@ function handleStart() {
   transition: border-color 0.15s, background 0.15s;
 }
 
-.inj-item:hover:not(.inj-item-disabled) {
+.inj-item:hover {
   border-color: var(--color-accent);
-}
-
-.inj-item-disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .inj-item-toggle {
@@ -423,15 +415,6 @@ function handleStart() {
 .inj-item-hint {
   color: var(--color-text-muted);
   font-size: 11px;
-}
-
-.inj-item-badge {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: var(--color-bg-page);
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border-light);
 }
 
 /* ─── Character search ─── */

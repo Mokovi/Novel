@@ -90,7 +90,7 @@
                     :max="10"
                   />
                 </n-form-item>
-                <n-checkbox v-model:checked="editIsDefault" :disabled="currentTemplate.is_default">
+                <n-checkbox v-model:checked="editIsDefault">
                   设为默认模板
                 </n-checkbox>
               </n-form>
@@ -471,7 +471,7 @@ async function saveTemplate() {
       task_type: editTaskType.value || undefined,
       version: editVersion.value || undefined,
       description: editDescription.value || undefined,
-      is_default: editIsDefault.value || undefined,
+      is_default: editIsDefault.value,
       required_variables: editRequiredVars.value.length > 0 ? editRequiredVars.value : undefined,
       optional_variables: editOptionalVars.value.length > 0 ? editOptionalVars.value : undefined,
     }

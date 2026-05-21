@@ -66,9 +66,6 @@ def _apply_overrides_and_rebuild(ctx: dict, overrides: InjectionOverrides, db: S
 
 def _build_injection_items(ctx: dict) -> list[dict]:
     """Build injection metadata items from a prompt context dict."""
-    template = ctx.get("template", {})
-    fm = template.get("frontmatter", {})
-    required = set(fm.get("required_variables") or [])
     items = []
     for var_name in ctx.get("variables", {}):
         label = _VARIABLE_LABELS.get(var_name, var_name)
@@ -78,7 +75,7 @@ def _build_injection_items(ctx: dict) -> list[dict]:
             "label": label,
             "source": "system",
             "default_enabled": True,
-            "required": var_name in required,
+            "required": False,
             "available": bool(value and value.strip()),
         })
     return items

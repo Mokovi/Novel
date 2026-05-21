@@ -70,7 +70,12 @@ async function fetchCharacter() {
 }
 
 function goBack() {
-  router.push(`/books/${bookId.value}/characters`)
+  // 返回上一个页面（如提示词变量页），无历史记录时回退到人物列表
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    router.push(`/books/${bookId.value}/characters`)
+  }
 }
 
 async function handleDelete() {
