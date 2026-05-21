@@ -120,6 +120,22 @@
               </template>
               刷新
             </n-button>
+            <n-button size="small" quaternary @click="handleExportLocations">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </n-icon>
+              </template>
+              导出
+            </n-button>
+            <n-button size="small" quaternary @click="handleLocImportClick">
+              <template #icon>
+                <n-icon>
+                  <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </n-icon>
+              </template>
+              导入
+            </n-button>
             <n-button size="small" @click="locGen.prepare()">
               <template #icon>
                 <n-icon>
@@ -151,7 +167,7 @@
           <div v-if="locLoading" class="loading-center"><n-spin size="medium" /></div>
           <n-empty v-else-if="locations.length === 0" description="暂无地点，点击「新建地点」开始创建" class="empty-state" />
           <div v-else class="card-grid">
-            <n-card v-for="loc in filteredLocations" :key="loc.id" class="enhanced-card character-card" hoverable size="small">
+            <n-card v-for="loc in filteredLocations" :key="loc.id" class="enhanced-card character-card" :class="{ 'is-locked': isLocked(loc) }" hoverable size="small" @click="openLocDetail(loc)" @contextmenu.prevent="showContextMenu($event, loc, 'location')">
               <div class="card-content">
                 <div class="card-top">
                   <span class="character-name">{{ loc.name }}</span>
@@ -255,7 +271,7 @@
           <div v-if="charLoading" class="loading-center"><n-spin size="medium" /></div>
           <n-empty v-else-if="characters.length === 0" description="暂无人物，点击「新建人物」开始创建" class="empty-state" />
           <div v-else class="card-grid">
-            <n-card v-for="c in characters" :key="c.id" class="enhanced-card character-card" hoverable size="small" @click="openCharDetail(c.id)">
+            <n-card v-for="c in characters" :key="c.id" class="enhanced-card character-card" :class="{ 'is-locked': isLocked(c) }" hoverable size="small" @click="openCharDetail(c)" @contextmenu.prevent="showContextMenu($event, c, 'character')">
               <div class="card-content">
                 <div class="card-top">
                   <span class="character-name">{{ c.name }}</span>
@@ -329,6 +345,106 @@
         </div>
       </n-tab-pane>
     </n-tabs>
+
+    <!-- Right-click context menu -->
+    <teleport to="body">
+      <div v-if="contextMenu.visible" class="context-menu-overlay" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu" />
+      <div v-if="contextMenu.visible" class="context-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
+        <div class="context-menu-item danger" @click="handleContextDelete">
+          <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          删除
+        </div>
+        <div class="context-menu-item" @click="handleContextToggleLock">
+          <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          {{ contextMenu.target?.is_locked ? '解锁' : '锁定' }}
+        </div>
+      </div>
+    </teleport>
+
+    <!-- Character detail modal -->
+    <n-modal v-model:show="showCharDetail" preset="card" title="" style="width: 640px" :mask-closable="true" segmented @close="selectedChar = null">
+      <template v-if="selectedChar">
+        <div class="detail-modal">
+          <div class="detail-title-row">
+            <h3 class="detail-title">{{ selectedChar.name }}</h3>
+            <n-tag v-if="selectedChar.role_type" :type="charRoleTag(selectedChar.role_type)" size="small">{{ charRoleLabel(selectedChar.role_type) }}</n-tag>
+            <span v-if="isLocked(selectedChar)" class="lock-badge" title="已锁定">
+              <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </div>
+          <div class="detail-grid">
+            <div class="detail-field">
+              <label>别名</label>
+              <div class="detail-value">{{ selectedChar.aliases || '—' }}</div>
+            </div>
+            <div class="detail-field">
+              <label>状态</label>
+              <div class="detail-value">
+                <n-tag v-if="selectedChar.status === 'active'" size="tiny" type="success">活跃</n-tag>
+                <n-tag v-else-if="selectedChar.status === 'deceased'" size="tiny" type="error">已故</n-tag>
+                <n-tag v-else size="tiny" type="warning">{{ selectedChar.status }}</n-tag>
+              </div>
+            </div>
+            <div class="detail-field detail-field-full">
+              <label>描述</label>
+              <div class="detail-value">{{ selectedChar.description || '—' }}</div>
+            </div>
+            <div class="detail-field">
+              <label>外貌</label>
+              <div class="detail-value">{{ selectedChar.appearance || '—' }}</div>
+            </div>
+            <div class="detail-field">
+              <label>性格</label>
+              <div class="detail-value">{{ selectedChar.personality || '—' }}</div>
+            </div>
+            <div class="detail-field">
+              <label>背景</label>
+              <div class="detail-value">{{ selectedChar.background || '—' }}</div>
+            </div>
+            <div class="detail-field">
+              <label>目标</label>
+              <div class="detail-value">{{ selectedChar.goals || '—' }}</div>
+            </div>
+          </div>
+          <div class="detail-footer">
+            <span class="detail-time">创建: {{ formatDate(selectedChar.created_at) }} | 更新: {{ formatDate(selectedChar.updated_at) }}</span>
+            <n-button size="tiny" quaternary @click="router.push(`/books/${bookId}/characters/${selectedChar.id}`)">在人物管理中编辑</n-button>
+          </div>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- Location detail modal -->
+    <n-modal v-model:show="showLocDetail" preset="card" title="" style="width: 560px" :mask-closable="true" segmented @close="selectedLoc = null">
+      <template v-if="selectedLoc">
+        <div class="detail-modal">
+          <div class="detail-title-row">
+            <h3 class="detail-title">{{ selectedLoc.name }}</h3>
+            <n-tag v-if="selectedLoc.location_type" :type="locTypeColors[selectedLoc.location_type] || 'default'" size="small">{{ locTypeLabels[selectedLoc.location_type] || selectedLoc.location_type }}</n-tag>
+            <span v-if="isLocked(selectedLoc)" class="lock-badge" title="已锁定">
+              <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </div>
+          <div class="detail-grid detail-grid-single">
+            <div class="detail-field">
+              <label>名称</label>
+              <div class="detail-value">{{ selectedLoc.name }}</div>
+            </div>
+            <div class="detail-field">
+              <label>类型</label>
+              <div class="detail-value">{{ locTypeLabels[selectedLoc.location_type] || selectedLoc.location_type || '—' }}</div>
+            </div>
+            <div class="detail-field detail-field-full">
+              <label>描述</label>
+              <div class="detail-value">{{ selectedLoc.description || '—' }}</div>
+            </div>
+          </div>
+          <div class="detail-footer">
+            <span class="detail-time">创建: {{ formatDate(selectedLoc.created_at) }} | 更新: {{ formatDate(selectedLoc.updated_at) }}</span>
+          </div>
+        </div>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -339,14 +455,15 @@ import { useMessage } from 'naive-ui'
 import { NCard, NSpace } from 'naive-ui'
 import { marked } from 'marked'
 import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateBookOutline, getBookWorldview } from '../api/books.js'
-import { listLocations, createLocation } from '../api/locations.js'
-import { listCharacters, importCharacters } from '../api/characters.js'
+import { listLocations, createLocation, deleteLocation, updateLocation, importLocations } from '../api/locations.js'
+import { listCharacters, importCharacters, deleteCharacter, updateCharacter } from '../api/characters.js'
 import { generateWorldview, fetchWorldviewInjections, generateLocations, fetchLocationInjections, generateCharacters, fetchCharacterInjections } from '../api/generate.js'
 import CharacterForm from '../components/character/CharacterForm.vue'
 import SectionHeader from '../components/common/SectionHeader.vue'
 import CopyButton from '../components/common/CopyButton.vue'
 import GenModal from '../components/generate/GenModal.vue'
 import { useSSEGeneration } from '../composables/useSSEGeneration.js'
+import { showConfirm } from '../utils/confirm.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -392,6 +509,16 @@ const showCreateLoc = ref(false)
 const newLocName = ref('')
 const newLocType = ref('')
 const newLocDesc = ref('')
+
+// ── Right-click context menu ──
+const contextMenu = reactive({ visible: false, x: 0, y: 0, target: null, type: '' })
+const lockedIds = reactive(new Set())
+
+// ── Detail modals ──
+const showCharDetail = ref(false)
+const selectedChar = ref(null)
+const showLocDetail = ref(false)
+const selectedLoc = ref(null)
 
 // ── SSE Generation composables ──
 const worldviewGen = useSSEGeneration({
@@ -492,6 +619,9 @@ async function fetchLocations() {
   try {
     const res = await listLocations(bookId.value)
     locations.value = res.data || []
+    for (const l of locations.value) {
+      if (l.is_locked) lockedIds.add(l.id)
+    }
   } catch { message.error('加载地点列表失败') }
   finally { locLoading.value = false }
 }
@@ -523,6 +653,144 @@ const filteredLocations = computed(() => {
   return locations.value.filter(l => l.location_type === locTypeFilter.value)
 })
 
+// ── Context menu handlers ──
+function showContextMenu(e, target, type) {
+  contextMenu.visible = true
+  contextMenu.x = e.clientX
+  contextMenu.y = e.clientY
+  contextMenu.target = target
+  contextMenu.type = type
+}
+function closeContextMenu() {
+  contextMenu.visible = false
+  contextMenu.target = null
+  contextMenu.type = ''
+}
+async function handleContextDelete() {
+  const target = contextMenu.target
+  if (!target) return
+  closeContextMenu()
+  const typeLabel = contextMenu.type === 'character' ? '人物' : '地点'
+  const confirmed = await showConfirm({ content: `确定删除${typeLabel}「${target.name}」吗？` })
+  if (!confirmed) return
+  try {
+    if (contextMenu.type === 'character') {
+      await deleteCharacter(target.id)
+    } else {
+      await deleteLocation(target.id)
+    }
+    message.success(`${typeLabel}已删除`)
+    lockedIds.delete(target.id)
+    if (contextMenu.type === 'character') await fetchCharacters()
+    else await fetchLocations()
+  } catch (e) {
+    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+async function handleContextToggleLock() {
+  const target = contextMenu.target
+  if (!target) return
+  const newLocked = !target.is_locked
+  closeContextMenu()
+  try {
+    if (contextMenu.type === 'character') {
+      await updateCharacter(target.id, { is_locked: newLocked })
+      target.is_locked = newLocked
+    } else {
+      await updateLocation(target.id, { is_locked: newLocked })
+      target.is_locked = newLocked
+    }
+    if (newLocked) lockedIds.add(target.id)
+    else lockedIds.delete(target.id)
+    message.success(newLocked ? '已锁定' : '已解锁')
+  } catch (e) {
+    message.error('操作失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+function isLocked(item) {
+  return item.is_locked || lockedIds.has(item.id)
+}
+
+// ── Detail modal handlers ──
+function openCharDetail(c) {
+  selectedChar.value = c
+  showCharDetail.value = true
+}
+function openLocDetail(loc) {
+  selectedLoc.value = loc
+  showLocDetail.value = true
+}
+
+// ── Location import/export ──
+async function handleExportLocations() {
+  const data = locations.value.map(l => ({
+    name: l.name,
+    location_type: l.location_type || null,
+    description: l.description || null,
+  }))
+  const blob = new Blob(
+    [JSON.stringify({ format_version: 1, locations: data }, null, 2)],
+    { type: 'application/json' },
+  )
+
+  if ('showSaveFilePicker' in window) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: `locations_${bookId.value}.json`,
+        types: [{ description: 'JSON 文件', accept: { 'application/json': ['.json'] } }],
+      })
+      const writable = await handle.createWritable()
+      await writable.write(blob)
+      await writable.close()
+      message.success('导出成功')
+      return
+    } catch (err) {
+      if (err.name === 'AbortError' || err.name === 'SecurityError') return
+    }
+  }
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `locations_${bookId.value}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function handleLocImportClick() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json'
+  input.style.display = 'none'
+  input.addEventListener('change', handleLocFileSelected)
+  document.body.appendChild(input)
+  input.click()
+  document.body.removeChild(input)
+}
+
+async function handleLocFileSelected(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    const text = await file.text()
+    const data = JSON.parse(text)
+    if (!data.locations || !Array.isArray(data.locations)) {
+      message.error('无效的导入文件：缺少 locations 数组')
+      return
+    }
+    const res = await importLocations(bookId.value, data)
+    const result = res.data
+    if (result.errors?.length) {
+      message.warning(`导入完成，${result.created_count} 条成功，${result.skipped_count} 条跳过`)
+    } else {
+      message.success(`成功导入 ${result.created_count} 个地点`)
+    }
+    await fetchLocations()
+  } catch (err) {
+    message.error('导入失败: ' + (err.response?.data?.detail || err.message))
+  }
+}
+
 async function fetchCharacters() {
   charLoading.value = true
   try {
@@ -530,12 +798,11 @@ async function fetchCharacters() {
     if (charRoleFilter.value) params.role_type = charRoleFilter.value
     const res = await listCharacters(bookId.value, params)
     characters.value = res.data
+    for (const c of characters.value) {
+      if (c.is_locked) lockedIds.add(c.id)
+    }
   } catch { message.error('加载人物列表失败') }
   finally { charLoading.value = false }
-}
-
-function openCharDetail(id) {
-  router.push(`/books/${bookId.value}/characters/${id}`)
 }
 
 function onCharCreated() {
@@ -786,4 +1053,51 @@ onMounted(() => {
 .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
 .card-time { font-size: 11px; color: var(--color-text-muted); }
 .empty-state { min-height: 200px; display: flex; align-items: center; justify-content: center; }
+
+/* ── Locked card state ── */
+.character-card.is-locked { opacity: 0.7; position: relative; }
+.character-card.is-locked::after {
+  content: '🔒';
+  position: absolute; top: 8px; right: 8px;
+  font-size: 14px; line-height: 1;
+}
+
+/* ── Context menu ── */
+.context-menu-overlay {
+  position: fixed; inset: 0; z-index: 9998;
+}
+.context-menu {
+  position: fixed; z-index: 9999;
+  background: var(--color-bg-card, #fff);
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  padding: 4px 0;
+  min-width: 120px;
+}
+.context-menu-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; font-size: 13px; cursor: pointer;
+  color: var(--color-text-primary, #333);
+  transition: background 0.15s;
+}
+.context-menu-item:hover { background: var(--color-bg-hover, #f5f5f5); }
+.context-menu-item.danger { color: #d03050; }
+.context-menu-item.danger:hover { background: #fff0f0; }
+
+/* ── Detail modals ── */
+.detail-modal { padding: 4px 0; }
+.detail-title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.detail-title { margin: 0; font-size: 20px; font-weight: 700; color: var(--color-text-primary); }
+.lock-badge { display: inline-flex; color: var(--color-text-muted); }
+.detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px;
+}
+.detail-grid-single { grid-template-columns: 1fr; }
+.detail-field { display: flex; flex-direction: column; gap: 4px; }
+.detail-field-full { grid-column: 1 / -1; }
+.detail-field label { font-size: 11px; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.detail-value { font-size: 14px; color: var(--color-text-primary); line-height: 1.6; word-break: break-word; }
+.detail-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--color-border); }
+.detail-time { font-size: 11px; color: var(--color-text-muted); }
 </style>

@@ -77,6 +77,10 @@ def main():
     _add_column("model_apis", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE")
     _add_column("api_plans", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE")
 
+    # is_locked columns
+    _add_column("characters", "is_locked", "BOOLEAN DEFAULT 0")
+    _add_column("locations", "is_locked", "BOOLEAN DEFAULT 0")
+
     # Seed default admin user if not exists
     db = Session(engine)
     try:

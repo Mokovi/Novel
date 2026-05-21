@@ -19,3 +19,7 @@ export function updateLocation(id, data) {
 export function deleteLocation(id) {
   return http.delete(`/locations/${id}`)
 }
+
+export function importLocations(bookId, data) {
+  return http.post('/locations/import', data, { params: { book_id: bookId } })
+}

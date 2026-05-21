@@ -24,6 +24,7 @@ class Character(Base):
     personality: Mapped[str | None] = mapped_column(Text, nullable=True)
     background: Mapped[str | None] = mapped_column(Text, nullable=True)
     goals: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_locked: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc), nullable=False
     )

@@ -16,6 +16,7 @@ class LocationUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=255)
     location_type: Optional[str] = None
     description: Optional[str] = None
+    is_locked: Optional[bool] = None
 
 
 class LocationResponse(BaseModel):
@@ -23,6 +24,7 @@ class LocationResponse(BaseModel):
     name: str
     location_type: Optional[str] = None
     description: Optional[str] = None
+    is_locked: bool = False
     created_at: datetime
     updated_at: datetime
 

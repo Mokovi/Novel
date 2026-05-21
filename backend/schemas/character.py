@@ -28,6 +28,7 @@ class CharacterUpdate(BaseModel):
     personality: Optional[str] = None
     background: Optional[str] = None
     goals: Optional[str] = None
+    is_locked: Optional[bool] = None
 
 
 class CharacterResponse(BaseModel):
@@ -41,6 +42,7 @@ class CharacterResponse(BaseModel):
     personality: Optional[str] = None
     background: Optional[str] = None
     goals: Optional[str] = None
+    is_locked: bool = False
     created_at: datetime
     updated_at: datetime
 
