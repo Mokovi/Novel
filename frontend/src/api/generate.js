@@ -219,6 +219,21 @@ export async function fetchMapInjections(bookId) {
   return injectionFetch(`${BASE}/generate/map/injections?book_id=${bookId}`)
 }
 
+// ── Location generation ─────────────────────────────────────
+
+export function generateLocations(bookId, handlers, overrides = {}) {
+  return consumeSSE(`${BASE}/generate/locations?book_id=${bookId}`, handlers, overrides, getToken())
+}
+
+export async function fetchLocationInjections(bookId) {
+  return injectionFetch(`${BASE}/generate/locations/injections?book_id=${bookId}`)
+}
+
+export async function previewLocationPrompt(bookId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/generate/locations/preview?book_id=${bookId}`, body)
+}
+
 // ── Character generation ────────────────────────────────────
 
 export function generateCharacters(bookId, handlers, overrides = {}) {

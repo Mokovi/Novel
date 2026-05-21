@@ -12,6 +12,7 @@ TASK_KEYS = [
     "outline_design",
     "chapter_writing",
     "character_design",
+    "location_design",
     "worldbuilding",
     "revision",
 ]

@@ -187,8 +187,8 @@
           </n-modal>
 
           <GenModal
-            title="AI 生成地图设定"
-            gen-type="map"
+            title="AI 生成地点"
+            gen-type="location"
             :visible="locGen.visible.value"
             :phase="locGen.phase.value"
             :output="locGen.output.value"
@@ -196,6 +196,7 @@
             :tokens="locGen.tokens.value"
             :running="locGen.running.value"
             :injection-items="locGen.injectionItems.value"
+            :result="locGen.result.value"
             :book-id="bookId"
             @start="locGen.start"
             @cancel="locGen.cancel()"
@@ -340,7 +341,7 @@ import { marked } from 'marked'
 import { fetchPromptVariables, getBook, updateBook, updateBookWorldview, updateBookOutline, getBookWorldview } from '../api/books.js'
 import { listLocations, createLocation } from '../api/locations.js'
 import { listCharacters, importCharacters } from '../api/characters.js'
-import { generateWorldview, fetchWorldviewInjections, generateMap, fetchMapInjections, generateCharacters, fetchCharacterInjections } from '../api/generate.js'
+import { generateWorldview, fetchWorldviewInjections, generateLocations, fetchLocationInjections, generateCharacters, fetchCharacterInjections } from '../api/generate.js'
 import CharacterForm from '../components/character/CharacterForm.vue'
 import SectionHeader from '../components/common/SectionHeader.vue'
 import CopyButton from '../components/common/CopyButton.vue'
@@ -405,10 +406,10 @@ const worldviewGen = useSSEGeneration({
 })
 
 const locGen = useSSEGeneration({
-  genType: 'map',
+  genType: 'location',
   bookId,
-  fetchInjectionsFn: fetchMapInjections,
-  generateFn: generateMap,
+  fetchInjectionsFn: fetchLocationInjections,
+  generateFn: generateLocations,
   onReload: fetchLocations,
 })
 

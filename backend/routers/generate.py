@@ -9,15 +9,18 @@ from backend.models.user import User
 from backend.routers.deps import get_current_user
 from backend.repositories import chapter_repo
 from backend.repositories import character_repo
+from backend.repositories import location_repo
 from backend.schemas.generate import GenerateRequest, InjectionOverrides, OutlineGenerateRequest
 from backend.repositories import book_repo
 from backend.services import character_parser
+from backend.services import location_parser
 from backend.services import prompt_builder
 from backend.services.generator import (
     apply_injection_overrides,
     build_arc_prompt_variables,
     build_book_prompt_variables,
     build_character_prompt_variables,
+    build_location_prompt_variables,
     build_map_prompt_variables,
     build_prompt_variables,
     build_volume_prompt_variables,
@@ -54,6 +57,7 @@ _VARIABLE_LABELS: dict[str, str] = {
     "current_map": "当前地图设定",
     "map_data": "地图设定",
     "current_characters": "当前人物列表",
+    "current_locations": "当前地点列表",
 }
 
 
@@ -505,6 +509,99 @@ async def map_injection_items(
 ):
     """Return injection metadata for a map generation."""
     ctx = build_map_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    return {
+        "items": _build_injection_items(ctx),
+        "template_name": ctx["template_name"],
+        "model": ctx["model_name"],
+    }
+
+
+# ── Location generation ─────────────────────────────────────
+
+
+@router.post("/locations")
+async def generate_locations(
+    book_id: int = Query(..., description="Book ID"),
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stream location generation via SSE, parse result, bulk-create locations."""
+    ctx = build_location_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.user_prompt:
+        ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
+
+    import json
+
+    async def _stream_and_save():
+        full_content = ""
+        async for event in generate_outline_stream(db, ctx):
+            yield event
+            if event.startswith("data: "):
+                try:
+                    parsed = json.loads(event[6:].strip())
+                    if parsed.get("event") == "done":
+                        full_content = parsed.get("content", "")
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    pass
+        if full_content:
+            parsed_locs = location_parser.parse_location_markdown(full_content)
+            if parsed_locs:
+                result = location_repo.bulk_create_locations(db, parsed_locs, book_id)
+                yield _sse_event("summary", {
+                    "summary": {
+                        "created_count": result["created_count"],
+                        "skipped_count": result["skipped_count"],
+                        "errors": result["errors"],
+                    }
+                })
+
+    return StreamingResponse(
+        _stream_and_save(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/locations/preview")
+async def preview_location_prompt(
+    book_id: int = Query(..., description="Book ID"),
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return assembled prompt and metadata for location generation without generating."""
+    ctx = build_location_prompt_variables(db, book_id)
+    if ctx.get("error"):
+        raise HTTPException(status_code=400, detail=ctx["error"])
+    if body.injection_overrides:
+        ctx = _apply_overrides_and_rebuild(ctx, body.injection_overrides, db)
+        if ctx.get("error"):
+            raise HTTPException(status_code=400, detail=ctx["error"])
+    return {
+        "prompt": ctx["prompt"],
+        "token_estimate": ctx["token_estimate"],
+        "model": ctx["model_name"],
+        "template_name": ctx["template_name"],
+    }
+
+
+@router.post("/locations/injections")
+async def location_injection_items(
+    book_id: int = Query(..., description="Book ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return injection metadata for a location generation."""
+    ctx = build_location_prompt_variables(db, book_id)
     if ctx.get("error"):
         raise HTTPException(status_code=400, detail=ctx["error"])
     return {

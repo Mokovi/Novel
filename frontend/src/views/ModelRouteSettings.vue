@@ -193,6 +193,18 @@
                 />
               </div>
             </div>
+            <div class="gen-setting-divider" />
+            <div class="gen-setting-item">
+              <div class="gen-setting-number">4</div>
+              <div class="gen-setting-content">
+                <label class="gen-setting-label">前文章节注入模式</label>
+                <p class="gen-setting-hint">选择生成时注入前文的方式。摘要模式节省 Token；全文模式上下文更完整但消耗更大。</p>
+                <n-radio-group v-model:value="settingsStore.previousContextMode" style="margin-top: 4px">
+                  <n-radio value="summary">前文摘要</n-radio>
+                  <n-radio value="full_text">前文全文</n-radio>
+                </n-radio-group>
+              </div>
+            </div>
             <div class="gen-setting-footer">
               <n-button
                 type="primary"
@@ -289,12 +301,13 @@ const providerOptions = [
   { label: 'Anthropic', value: 'anthropic' },
 ]
 
-const taskKeys = ['outline_design', 'chapter_writing', 'character_design', 'worldbuilding', 'revision']
+const taskKeys = ['outline_design', 'chapter_writing', 'character_design', 'location_design', 'worldbuilding', 'revision']
 
 const taskLabels = {
   outline_design: '大纲设计',
   chapter_writing: '章节写作',
   character_design: '人物设计',
+  location_design: '地点设计',
   worldbuilding: '世界观构建',
   revision: '润色修改',
 }

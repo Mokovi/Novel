@@ -68,6 +68,19 @@ def _format_character_profiles(characters: list) -> str:
     return "\n\n".join(parts)
 
 
+def _format_location_profiles(locations: list) -> str:
+    """Format location data into a prompt-ready profile block."""
+    parts = []
+    for loc in locations:
+        lines = [f"## {loc.name}"]
+        if loc.location_type:
+            lines.append(f"地点类型：{loc.location_type}")
+        if loc.description:
+            lines.append(f"描述：{loc.description}")
+        parts.append("\n".join(lines))
+    return "\n\n".join(parts)
+
+
 def _get_gen_config() -> dict:
     """Read the 'generation' section from config.json with defaults."""
     cfg = load_config()
@@ -75,6 +88,7 @@ def _get_gen_config() -> dict:
     return {
         "previous_chapter_count": gen.get("previous_chapter_count", 1),
         "outline_generation_count": gen.get("outline_generation_count", 1),
+        "previous_context_mode": gen.get("previous_context_mode", "summary"),
     }
 
 
@@ -379,17 +393,24 @@ def build_prompt_variables(db: Session, chapter_id: int, book_id: int) -> dict:
         "map_data": _read_book_map(db, book_id),
     }
 
-    # Inject previous chapter AI summaries
+    # Inject previous chapter context (summary or full text)
     gen_config = _get_gen_config()
     prev_count = gen_config["previous_chapter_count"]
+    mode = gen_config.get("previous_context_mode", "summary")
     if prev_count > 0:
-        summaries = chapter_repo.get_previous_chapter_summaries(db, chapter_id, prev_count)
-        if summaries:
-            parts = []
-            for i, s in enumerate(summaries, 1):
-                parts.append(f"前{i}章摘要：{s}")
-            variables["previous_chapter_summary"] = "\n".join(parts)
-            logger.info("Injected {} previous chapter summaries", len(summaries))
+        if mode == "full_text":
+            contents = chapter_repo.get_previous_chapter_contents(db, chapter_id, prev_count)
+            if contents:
+                variables["previous_chapter_summary"] = "\n\n---\n\n".join(contents)
+                logger.info("Injected {} previous chapter full texts", len(contents))
+        else:
+            summaries = chapter_repo.get_previous_chapter_summaries(db, chapter_id, prev_count)
+            if summaries:
+                parts = []
+                for i, s in enumerate(summaries, 1):
+                    parts.append(f"前{i}章摘要：{s}")
+                variables["previous_chapter_summary"] = "\n".join(parts)
+                logger.info("Injected {} previous chapter summaries", len(summaries))
 
     # Inject parent arc outline (if configured)
     if gen_config.get("outline_injection_depth", 1) >= 1 and chapter.arc and chapter.arc.outline:
@@ -934,6 +955,62 @@ def build_character_prompt_variables(db: Session, book_id: int) -> dict:
     route_config = resolve_api_for_task(db, "character_design")
     if not route_config or not route_config.get("api_key"):
         return {"error": "No API configured for character_design task"}
+    model_name = route_config.get("model_name", "")
+    template_name = template.get("frontmatter", {}).get("name", template.get("file_name", ""))
+
+    return {
+        "template": template,
+        "variables": variables,
+        "prompt": prompt,
+        "token_estimate": token_estimate,
+        "route_config": route_config,
+        "model_name": model_name,
+        "template_name": template_name,
+    }
+
+
+def build_location_prompt_variables(db: Session, book_id: int) -> dict:
+    """Assemble prompt variables for generating location entries."""
+    try:
+        template = prompt_builder.load_template("location_design")
+    except (FileNotFoundError, ValueError) as e:
+        return {"error": str(e)}
+
+    book = book_repo.get_book(db, book_id)
+    book_name = book.name if book else ""
+    book_description = book.description if book else ""
+
+    worldview_text = _read_book_worldview(db, book_id)
+    if not worldview_text:
+        worldview_text = "（暂无世界观设定）"
+
+    writing_style_text = _read_book_writing_style(db, book_id)
+
+    from backend.repositories import location_repo
+    locs = location_repo.list_locations(db, book_id=book_id)
+    if locs:
+        current_locations = _format_location_profiles(locs)
+    else:
+        current_locations = "（暂无已创建地点）"
+
+    variables = {
+        "worldview": worldview_text,
+        "current_locations": current_locations,
+        "book_name": book_name,
+        "book_description": book_description or "",
+        "writing_style": writing_style_text,
+        "map_data": _read_book_map(db, book_id),
+    }
+
+    try:
+        prompt = prompt_builder.build_prompt(template, variables)
+    except ValueError as e:
+        return {"error": str(e)}
+
+    token_estimate = prompt_builder.estimate_tokens(prompt)
+    route_config = resolve_api_for_task(db, "location_design")
+    if not route_config or not route_config.get("api_key"):
+        return {"error": "No API configured for location_design task"}
     model_name = route_config.get("model_name", "")
     template_name = template.get("frontmatter", {}).get("name", template.get("file_name", ""))
 
