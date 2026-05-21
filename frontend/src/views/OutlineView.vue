@@ -455,8 +455,8 @@
         <n-form-item label="章节标题">
           <n-input v-model:value="newChapter.title" placeholder="如：第一章 开端" />
         </n-form-item>
-        <n-form-item label="摘要">
-          <n-input v-model:value="newChapter.summary" type="textarea" rows="3" placeholder="本章摘要" />
+        <n-form-item label="自定义提示词">
+          <n-input v-model:value="newChapter.summary" type="textarea" rows="3" placeholder="输入对本章生成的具体要求（可选）" />
         </n-form-item>
       </n-form>
       <template #footer>

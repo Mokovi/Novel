@@ -67,4 +67,4 @@ You are a novelist writing a chapter of a long-form novel. Follow the instructio
 
 ---
 
-Write the chapter content below. Aim for approximately 2000 words of compelling narrative prose that follows the summary and respects the established world setting and writing style.
+Write the chapter content below. Aim for approximately 2000 words of compelling narrative prose that follows the summary and respects the established world setting and writing style. If no chapter title is provided, generate an appropriate title based on the content and output it as the first line prefixed with `# `.

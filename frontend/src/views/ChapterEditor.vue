@@ -427,8 +427,12 @@ watch(
       syncEditBuffers()
       if (route.query.generate === '1') {
         router.replace({ path: route.path, params: route.params })
-        // Trigger the prompt panel; user must click "开始生成" to proceed
-        handleGenerate()
+        if (!store.currentChapter.title) {
+          // Auto-start generation when title is empty (skip PromptInjectionPanel)
+          startGeneration(null, '')
+        } else {
+          handleGenerate()
+        }
       }
     }
   },
