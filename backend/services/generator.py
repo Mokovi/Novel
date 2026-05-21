@@ -428,6 +428,11 @@ def build_prompt_variables(db: Session, chapter_id: int, book_id: int) -> dict:
         len(worldview_text), chapter.worldview_level, len(writing_style_text), len(characters),
     )
 
+    # Inject current chapter content if it exists (regeneration scenarios)
+    if chapter.content:
+        variables["current_chapter_content"] = chapter.content
+        logger.info("Injected current chapter content ({} chars) for regeneration", len(chapter.content))
+
     # 4. Build prompt
     try:
         prompt = prompt_builder.build_prompt(template, variables)
@@ -537,17 +542,21 @@ async def generate_chapter_stream(
         yield _sse_event("error", {"message": f"Save failed: {e}"})
         return
 
-    # 8. Generate AI summary
+    # 8. Signal done immediately (AI summary is generated after as a non-blocking step)
+    yield _sse_event("done", {"word_count": word_count, "model": model_name})
+
+    # 9. Generate AI summary (non-critical, runs after done to avoid blocking the frontend)
     chapter = chapter_repo.get_chapter(db, chapter_id)
     if chapter:
-        ai_summary = await generate_ai_summary(
-            db, full_content, chapter.title or "", chapter.summary or "",
-        )
-        if ai_summary:
-            chapter_repo.save_chapter_ai_summary(db, chapter_id, ai_summary)
-            yield _sse_event("summary", {"summary": ai_summary})
-
-    yield _sse_event("done", {"word_count": word_count, "model": model_name})
+        try:
+            ai_summary = await generate_ai_summary(
+                db, full_content, chapter.title or "", chapter.summary or "",
+            )
+            if ai_summary:
+                chapter_repo.save_chapter_ai_summary(db, chapter_id, ai_summary)
+                yield _sse_event("summary", {"summary": ai_summary})
+        except Exception as e:
+            logger.error("AI summary generation failed for chapter {}: {}", chapter_id, e)
 
 
 # ── Outline generation ─────────────────────────────────────

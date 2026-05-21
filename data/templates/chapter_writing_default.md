@@ -14,6 +14,7 @@ optional_variables:
   - chapter_outline
   - previous_chapter_summary
   - map_data
+  - current_chapter_content
 ---
 
 You are a novelist writing a chapter of a long-form novel. Follow the instructions below precisely.
@@ -25,6 +26,12 @@ You are a novelist writing a chapter of a long-form novel. Follow the instructio
 ## Chapter Summary
 
 {{chapter_summary}}
+
+{{#current_chapter_content}}
+## Current Chapter Content
+
+{{current_chapter_content}}
+{{/current_chapter_content}}
 
 {{#chapter_outline}}
 ## Chapter Outline
