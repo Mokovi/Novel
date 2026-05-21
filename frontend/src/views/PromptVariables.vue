@@ -243,6 +243,7 @@
             :tokens="charGen.tokens.value"
             :running="charGen.running.value"
             :injection-items="charGen.injectionItems.value"
+            :result="charGen.result.value"
             :book-id="bookId"
             @start="charGen.start"
             @cancel="charGen.cancel()"

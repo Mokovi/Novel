@@ -24,6 +24,7 @@ export function useSSEGeneration({ genType, bookId, fetchInjectionsFn, generateF
   const phase = ref('idle') // 'idle' | 'generating' | 'done'
   const abort = ref(null)
   const injectionItems = ref([])
+  const result = ref(null)
 
   const successMessages = {
     worldview: '世界观设定生成完成',
@@ -38,6 +39,7 @@ export function useSSEGeneration({ genType, bookId, fetchInjectionsFn, generateF
     running.value = false
     phase.value = 'idle'
     injectionItems.value = []
+    result.value = null
     visible.value = true
     try {
       const data = await fetchInjectionsFn(bookId.value)
@@ -64,10 +66,15 @@ export function useSSEGeneration({ genType, bookId, fetchInjectionsFn, generateF
       onToken: (token) => {
         output.value += token
       },
+      onSummary: (summary) => {
+        result.value = summary
+      },
       onDone: () => {
         running.value = false
         phase.value = 'done'
-        message.success(successMessages[genType] || '生成完成')
+        if (genType !== 'character') {
+          message.success(successMessages[genType] || '生成完成')
+        }
       },
       onError: (err) => {
         running.value = false
@@ -90,7 +97,7 @@ export function useSSEGeneration({ genType, bookId, fetchInjectionsFn, generateF
   }
 
   return {
-    visible, output, model, tokens, running, phase, injectionItems,
+    visible, output, model, tokens, running, phase, injectionItems, result,
     prepare, start, cancel, close,
   }
 }

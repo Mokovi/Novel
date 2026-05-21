@@ -21,6 +21,15 @@
           <CopyButton :text="output" />
           <div class="markdown-body" v-html="renderMarkdown(output)" />
         </div>
+        <div v-if="phase === 'done' && result" class="gen-result">
+          <n-alert v-if="result.created_count > 0" type="success" closable>
+            已创建 {{ result.created_count }} 个角色
+            <template v-if="result.skipped_count > 0">，跳过 {{ result.skipped_count }} 个</template>
+          </n-alert>
+          <n-alert v-if="result.errors?.length" type="warning" closable>
+            <div v-for="(err, i) in result.errors" :key="i" class="gen-error-item">{{ err }}</div>
+          </n-alert>
+        </div>
         <n-spin v-if="running" size="small" />
       </div>
       <template #action>
@@ -38,7 +47,7 @@
 </template>
 
 <script setup>
-import { NCard, NModal, NSpin, NSpace, NButton } from 'naive-ui'
+import { NCard, NModal, NSpin, NSpace, NButton, NAlert } from 'naive-ui'
 import { marked } from 'marked'
 import PromptInjectionPanel from './PromptInjectionPanel.vue'
 import CopyButton from '../common/CopyButton.vue'
@@ -54,6 +63,7 @@ defineProps({
   running: { type: Boolean, default: false },
   injectionItems: { type: Array, default: () => [] },
   bookId: { type: Number, required: true },
+  result: { type: Object, default: null },
 })
 
 defineEmits(['start', 'cancel', 'close'])
@@ -97,6 +107,15 @@ function renderMarkdown(text) {
 
 .preview-wrapper {
   position: relative;
+}
+
+.gen-result {
+  margin-top: 16px;
+}
+
+.gen-error-item {
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .markdown-body {

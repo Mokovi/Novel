@@ -8,8 +8,10 @@ from backend.database import get_db
 from backend.models.user import User
 from backend.routers.deps import get_current_user
 from backend.repositories import chapter_repo
+from backend.repositories import character_repo
 from backend.schemas.generate import GenerateRequest, InjectionOverrides, OutlineGenerateRequest
 from backend.repositories import book_repo
+from backend.services import character_parser
 from backend.services import prompt_builder
 from backend.services.generator import (
     apply_injection_overrides,
@@ -23,6 +25,7 @@ from backend.services.generator import (
     generate_ai_summary,
     generate_chapter_stream,
     generate_outline_stream,
+    _sse_event,
 )
 
 router = APIRouter(prefix="/api/v1/generate", tags=["generate"])
@@ -532,8 +535,33 @@ async def generate_characters(
     if body.user_prompt:
         ctx["prompt"] = ctx["prompt"] + "\n\n## 用户补充要求\n\n" + body.user_prompt
 
+    import json
+
+    async def _stream_and_save():
+        full_content = ""
+        async for event in generate_outline_stream(db, ctx):
+            yield event
+            if event.startswith("data: "):
+                try:
+                    parsed = json.loads(event[6:].strip())
+                    if parsed.get("event") == "done":
+                        full_content = parsed.get("content", "")
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    pass
+        if full_content:
+            parsed_chars = character_parser.parse_character_markdown(full_content)
+            if parsed_chars:
+                result = character_repo.bulk_create_characters(db, parsed_chars, book_id)
+                yield _sse_event("summary", {
+                    "summary": {
+                        "created_count": result["created_count"],
+                        "skipped_count": result["skipped_count"],
+                        "errors": result["errors"],
+                    }
+                })
+
     return StreamingResponse(
-        generate_outline_stream(db, ctx),
+        _stream_and_save(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
