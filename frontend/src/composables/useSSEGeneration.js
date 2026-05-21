@@ -54,7 +54,8 @@ export function useSSEGeneration({ genType, bookId, fetchInjectionsFn, generateF
     running.value = true
 
     const body = { user_prompt: userPrompt || '' }
-    if (overrides && (overrides.exclude_variables?.length || overrides.extra_variables || overrides.added_character_ids?.length)) {
+    const hasExtraVars = overrides?.extra_variables && Object.keys(overrides.extra_variables).length > 0
+    if (overrides && (overrides.exclude_variables?.length || hasExtraVars || overrides.added_character_ids?.length)) {
       body.injection_overrides = overrides
     }
 

@@ -581,7 +581,14 @@ def build_arc_prompt_variables(db: Session, arc_id: int, book_id: int) -> dict:
         "worldview": worldview_text,
         "writing_style": writing_style_text,
         "map_data": _read_book_map(db, book_id),
+        "character_profiles": "",
     }
+
+    # Load book characters as default context (user can toggle via injection panel)
+    from backend.repositories import character_repo as cr
+    all_chars = cr.list_characters(db, book_id=book_id)
+    if all_chars:
+        variables["character_profiles"] = _format_character_profiles(all_chars)
 
     # Inject parent volume outline (if configured)
     gen_config = _get_gen_config()
@@ -652,7 +659,13 @@ def build_volume_prompt_variables(db: Session, volume_id: int, book_id: int) -> 
         "worldview": worldview_text,
         "writing_style": writing_style_text,
         "map_data": _read_book_map(db, book_id),
+        "character_profiles": "",
     }
+
+    from backend.repositories import character_repo as cr
+    all_chars = cr.list_characters(db, book_id=book_id)
+    if all_chars:
+        variables["character_profiles"] = _format_character_profiles(all_chars)
 
     # Inject book outline (if configured)
     gen_config = _get_gen_config()
@@ -713,7 +726,13 @@ def build_book_prompt_variables(db: Session, book_id: int) -> dict:
         "worldview": worldview_text,
         "writing_style": writing_style_text,
         "map_data": _read_book_map(db, book_id),
+        "character_profiles": "",
     }
+
+    from backend.repositories import character_repo as cr
+    all_chars = cr.list_characters(db, book_id=book_id)
+    if all_chars:
+        variables["character_profiles"] = _format_character_profiles(all_chars)
 
     try:
         prompt = prompt_builder.build_prompt(template, variables)
@@ -792,7 +811,7 @@ def apply_injection_overrides(
         result.pop(var, None)
 
     # 2. Add extra characters
-    if overrides.added_character_ids and "character_profiles" in result:
+    if overrides.added_character_ids:
         from backend.repositories import character_repo
 
         chars = []
@@ -802,10 +821,19 @@ def apply_injection_overrides(
                 chars.append(c)
         if chars:
             added = _format_character_profiles(chars)
-            existing = result.get("character_profiles", "")
-            if existing:
-                result["character_profiles"] = existing + "\n\n" + added
-            else:
+            # Try common character variable names used across gen types
+            matched = False
+            for key in ("character_profiles", "current_characters"):
+                if key in result:
+                    existing = result.get(key, "")
+                    if existing and existing.strip():
+                        result[key] = existing + "\n\n" + added
+                    else:
+                        result[key] = added
+                    matched = True
+                    break
+            # If no character variable exists in this gen type, create one
+            if not matched:
                 result["character_profiles"] = added
 
     # 3. Merge extra variables

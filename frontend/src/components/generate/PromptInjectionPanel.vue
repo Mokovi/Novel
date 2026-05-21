@@ -173,10 +173,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { listCharacters } from '../../api/characters.js'
-import { previewPrompt, previewArcPrompt, previewVolumePrompt, previewBookPrompt, previewWorldviewPrompt, previewMapPrompt } from '../../api/generate.js'
+import { previewPrompt, previewArcPrompt, previewVolumePrompt, previewBookPrompt, previewWorldviewPrompt, previewMapPrompt, previewLocationPrompt, previewCharacterPrompt } from '../../api/generate.js'
 
 const props = defineProps({
   title: { type: String, default: 'AI 生成' },
@@ -272,6 +272,11 @@ onMounted(async () => {
   }
 })
 
+onUnmounted(() => {
+  if (previewTimer) clearTimeout(previewTimer)
+  pendingPreviewVersion = 0
+})
+
 // ── Extra variables ──
 const extraPairs = ref([])
 
@@ -311,17 +316,14 @@ function buildOverrides() {
 const showPreview = ref(false)
 const previewLoading = ref(false)
 const previewData = ref(null)
+let previewTimer = null
+let pendingPreviewVersion = 0
 
-async function handlePreview() {
+async function _fetchPreview() {
   const overrides = buildOverrides()
-  previewLoading.value = true
-  previewData.value = null
-  showPreview.value = true
-
   const hasOverrides = overrides.exclude_variables.length > 0
     || Object.keys(overrides.extra_variables).length > 0
     || overrides.added_character_ids.length > 0
-
   const overrideArg = hasOverrides ? overrides : null
 
   try {
@@ -348,17 +350,52 @@ async function handlePreview() {
         case 'map':
           data = await previewMapPrompt(props.bookId, overrideArg)
           break
+        case 'character':
+          data = await previewCharacterPrompt(props.bookId, overrideArg)
+          break
+        case 'location':
+          data = await previewLocationPrompt(props.bookId, overrideArg)
+          break
         default:
           throw new Error(`Unknown gen type: ${props.genType}`)
       }
     }
     previewData.value = data
+    previewLoading.value = false
   } catch (e) {
+    // Silently ignore stale responses (a newer version is already pending)
+    if (pendingPreviewVersion > 0) return
     message.error(e.message || '获取提示词预览失败')
     showPreview.value = false
-  } finally {
     previewLoading.value = false
   }
+}
+
+function _schedulePreviewRefresh() {
+  if (!showPreview.value) return
+  pendingPreviewVersion++
+  previewLoading.value = true
+  if (previewTimer) clearTimeout(previewTimer)
+  const myVersion = pendingPreviewVersion
+  previewTimer = setTimeout(async () => {
+    if (myVersion !== pendingPreviewVersion) return
+    await _fetchPreview()
+    if (myVersion === pendingPreviewVersion) pendingPreviewVersion = 0
+  }, 500)
+}
+
+// Auto-refresh preview when configuration changes (while modal is open)
+watch([enabledMap, addedCharacters, extraPairs, userPrompt], () => {
+  if (showPreview.value) _schedulePreviewRefresh()
+}, { deep: true })
+
+async function handlePreview() {
+  previewLoading.value = true
+  previewData.value = null
+  showPreview.value = true
+  pendingPreviewVersion++
+  await _fetchPreview()
+  pendingPreviewVersion = 0
 }
 
 // ── Start generation ──

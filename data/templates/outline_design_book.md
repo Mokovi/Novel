@@ -10,6 +10,7 @@ required_variables:
 optional_variables:
   - worldview
   - writing_style
+  - character_profiles
   - book_description
 ---
 
@@ -33,6 +34,12 @@ You are a novelist designing the outline for an entire book. Follow the instruct
 
 {{worldview}}
 {{/worldview}}
+
+{{#character_profiles}}
+## Character Profiles
+
+{{character_profiles}}
+{{/character_profiles}}
 
 ## Volume Outlines
 

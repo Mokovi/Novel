@@ -245,6 +245,11 @@ export async function fetchCharacterInjections(bookId) {
   return injectionFetch(`${BASE}/generate/characters/injections?book_id=${bookId}`)
 }
 
+export async function previewCharacterPrompt(bookId, injectionOverrides) {
+  const body = injectionOverrides ? { injection_overrides: injectionOverrides } : undefined
+  return previewFetch(`${BASE}/generate/characters/preview?book_id=${bookId}`, body)
+}
+
 // ── Book-scoped generate APIs ─────────────────────────────
 
 export function generateBookOutlineScoped(bookId, handlers, overrides = {}) {
